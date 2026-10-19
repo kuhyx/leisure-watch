@@ -17,6 +17,8 @@ from pathlib import Path
 import tempfile
 from typing import Final
 
+from leisure_watch import _safeio
+
 VERSION: Final = 1
 HMAC_KEY_FILE: Final = Path("/etc/workout-locker/hmac.key")
 STATES: Final = frozenset({"leisure", "free", "paused"})
@@ -193,24 +195,32 @@ def parse_doc(doc: dict[str, object]) -> Now | None:
     )
 
 
+def _verified(doc: dict[str, object], key: bytes) -> Now | None:
+    sig = doc.get("sig")
+    if not isinstance(sig, str) or not hmac.compare_digest(sig, signature(doc, key)):
+        return None
+    return parse_doc(doc)
+
+
 def read_now(
     path: Path,
     now: float,
     max_age: float = 15,
     key_file: Path = HMAC_KEY_FILE,
 ) -> Now | None:
-    """The verified fact at *path*, or ``None`` if missing/stale/bad-sig."""
+    """The verified fact at *path*, or ``None`` if missing/stale/bad-sig.
+
+    *path* is user-writable and root reads it: a FIFO, symlink, oversized or
+    undecodable file is ``None`` too (fail closed), never a hang or a raise.
+    """
     key = read_key(key_file)
+    doc = _safeio.json_object(_safeio.read_regular(path))
+    if key is None or doc is None:
+        return None
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except OSError, ValueError:
+        parsed = _verified(doc, key)
+    except RecursionError:
         return None
-    if key is None or not isinstance(doc, dict):
-        return None
-    sig = doc.get("sig")
-    if not isinstance(sig, str) or not hmac.compare_digest(sig, signature(doc, key)):
-        return None
-    parsed = parse_doc(doc)
     if parsed is None or not now - max_age <= parsed.ts <= now + _FUTURE_SKEW:
         return None
     return parsed

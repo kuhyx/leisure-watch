@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from leisure_watch._browser import ExtReport
 from leisure_watch._sensors import SinkInput, Window
 from leisure_watch.allowlist import load_allowlist
-from leisure_watch.classify import ExtReport, Settings, Snapshot, classify
+from leisure_watch.classify import Settings, Snapshot, classify
 from tests._proc_helpers import fake_pid
 
 T = 1_760_000_000.0
@@ -34,7 +35,7 @@ def _report(
     audible: tuple[str, ...] = (),
     browser: str = "helium",
 ) -> dict[str, ExtReport]:
-    return {browser: ExtReport(browser, url, "tab", True, audible, T - age)}
+    return {browser: ExtReport(browser, url, "YouTube", True, audible, T - age)}
 
 
 def _keys(snap: Snapshot) -> tuple[str, list[tuple[str, str]]]:

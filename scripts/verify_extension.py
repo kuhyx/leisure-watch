@@ -37,7 +37,7 @@ from leisure_watch._extbuild import GECKO_ID, build
 from leisure_watch.extserver import ExtensionServer, ReportStore
 
 if TYPE_CHECKING:
-    from leisure_watch.classify import ExtReport
+    from leisure_watch._browser import ExtReport
 
 SCRATCH = Path.home() / "data" / "claude-scratch" / "leisure-watch-ext"
 HELIUM = "/opt/helium-browser-bin/helium"

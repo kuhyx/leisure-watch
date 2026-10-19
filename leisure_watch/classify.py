@@ -13,46 +13,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from leisure_watch import _proctree, _rules
+from leisure_watch._browser import (
+    EXTENSION_BROWSERS,
+    OTHER_BROWSERS,
+    browser_of,
+    mismatch,
+)
 from leisure_watch.allowlist import host_key
 from leisure_watch.facts import Focus, Now, Reason
 
 if TYPE_CHECKING:
+    from leisure_watch._browser import ExtReport
     from leisure_watch._sensors import SinkInput, Window
     from leisure_watch.allowlist import Allowlist
-
-# Browsers our extension runs in; everything else in BROWSERS counts in full.
-EXTENSION_BROWSERS: Final = ("helium", "librewolf")
-OTHER_BROWSERS: Final = frozenset(
-    {
-        "chromium",
-        "google-chrome",
-        "brave-browser",
-        "vivaldi-stable",
-        "vivaldi",
-        "firefox",
-        "firefox-esr",
-        "opera",
-        "microsoft-edge",
-        "thorium-browser",
-        "floorp",
-        "waterfox",
-        "zen",
-        "mullvad-browser",
-        "tor browser",
-    }
-)
-
-
-@dataclass(frozen=True)
-class ExtReport:
-    """The latest report one browser's extension sent."""
-
-    browser: str
-    url: str
-    title: str
-    focused: bool
-    audible: tuple[str, ...]
-    received: float
 
 
 @dataclass(frozen=True)
@@ -86,13 +59,6 @@ def _fresh(snap: Snapshot, settings: Settings, browser: str) -> ExtReport | None
     return report
 
 
-def _browser_of(name: str) -> str | None:
-    lowered = name.lower()
-    if lowered in EXTENSION_BROWSERS or lowered in OTHER_BROWSERS:
-        return lowered
-    return None
-
-
 # A focus rule either decides (True, reason-or-None-for-free) or passes.
 _Verdict = tuple[bool, Reason | None]
 _PASS: Final[_Verdict] = (False, None)
@@ -113,15 +79,19 @@ def _class_rule(_snap: Snapshot, settings: Settings, win: Window) -> _Verdict:
 
 
 def _browser_rule(snap: Snapshot, settings: Settings, win: Window) -> _Verdict:
-    browser = _browser_of(win.cls) or _browser_of(win.instance)
+    browser = browser_of(win.cls) or browser_of(win.instance)
     if browser is None:
         return _PASS
-    if browser not in EXTENSION_BROWSERS:
+    if browser in OTHER_BROWSERS:
         return True, Reason("failclosed", f"browser:{browser}", win.pid, win.title)
     report = _fresh(snap, settings, browser)
     if report is None:
         label = f"{win.cls}: extension silent > {settings.ext_max_age:g} s"
         return True, Reason("failclosed", f"failclosed:{browser}", win.pid, label)
+    wrong = mismatch(win.title, report)
+    if wrong is not None:
+        key = f"failclosed:{browser}:{wrong[0]}"
+        return True, Reason("failclosed", key, win.pid, f"{win.cls}: {wrong[1]}")
     if settings.allow.url_allowed(report.url):
         return _FREE
     key = f"domain:{host_key(report.url)}"
@@ -129,7 +99,7 @@ def _browser_rule(snap: Snapshot, settings: Settings, win: Window) -> _Verdict:
 
 
 def _title_rule(_snap: Snapshot, settings: Settings, win: Window) -> _Verdict:
-    return _FREE if settings.allow.title_allowed(win.title) else _PASS
+    return _FREE if settings.allow.title_allowed(win.title, win.cls) else _PASS
 
 
 def _fallback(win: Window) -> Reason:
@@ -144,7 +114,17 @@ def _fallback(win: Window) -> Reason:
 _FOCUS_RULES: Final = (_godot_rule, _class_rule, _browser_rule, _title_rule)
 
 
-def _focus_reason(snap: Snapshot, settings: Settings, win: Window) -> Reason | None:
+def _focus_reason(snap: Snapshot, settings: Settings) -> Reason | None:
+    """What the focus means; unknowable focus fails closed (Q8)."""
+    if not snap.display_ok:
+        return Reason("failclosed", "failclosed:display", None, "X display unreachable")
+    win = snap.window
+    if win is None:
+        return None  # _NET_ACTIVE_WINDOW is 0: an empty workspace
+    if not win.readable:
+        return Reason(
+            "failclosed", "failclosed:window", None, "focused window unreadable"
+        )
     for rule in _FOCUS_RULES:
         decided, reason = rule(snap, settings, win)
         if decided:
@@ -158,9 +138,15 @@ def _sink_reason(snap: Snapshot, settings: Settings, sink: SinkInput) -> Reason 
         return None
     if role == "reviewer":
         return Reason("media", "app:wsg-grabber", sink.pid, sink.label)
-    browser = _browser_of(sink.binary)
-    if browser in EXTENSION_BROWSERS and _fresh(snap, settings, browser):
-        return None  # its audible tabs speak for it
+    browser = browser_of(sink.binary)
+    report = _fresh(snap, settings, browser) if browser else None
+    if report is not None:
+        if report.audible:
+            return None  # its audible tabs speak for it
+        label = f"{sink.label}: playing, but no audible tab reported"
+        return Reason(
+            "failclosed", f"failclosed:{browser}:audio", sink.pid or None, label
+        )
     if browser is None and settings.allow.binary_allowed(sink.binary):
         return None
     return Reason(
@@ -187,12 +173,12 @@ def _game_reason(pid: int, key: str) -> Reason:
 
 
 def _focus(snap: Snapshot, *, idle: bool) -> Focus:
-    if not snap.display_ok:
+    if not snap.display_ok or (snap.window is not None and not snap.window.readable):
         return Focus("unknown", "", None, idle=idle)
     if snap.window is None:
         return Focus("desktop", "", None, idle=idle)
     domain = None
-    browser = _browser_of(snap.window.cls) or _browser_of(snap.window.instance)
+    browser = browser_of(snap.window.cls) or browser_of(snap.window.instance)
     report = snap.reports.get(browser or "")
     if report is not None and report.url:
         domain = host_key(report.url)
@@ -205,8 +191,8 @@ def classify(snap: Snapshot, settings: Settings) -> Now:
     """Turn *snap* into a :class:`Now` (``seq`` 0; the watcher numbers it)."""
     idle = snap.idle is not None and snap.idle >= settings.idle_threshold
     found: list[Reason | None] = [_game_reason(p, k) for p, k in snap.games.items()]
-    if snap.window is not None and not idle:
-        found.append(_focus_reason(snap, settings, snap.window))
+    if not idle:
+        found.append(_focus_reason(snap, settings))
     found.extend(_sink_reason(snap, settings, s) for s in snap.sinks)
     found.extend(_tab_reasons(snap, settings))
     reasons: dict[tuple[str, str], Reason] = {}

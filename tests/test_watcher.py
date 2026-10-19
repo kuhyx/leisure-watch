@@ -78,6 +78,17 @@ def test_gather_reads_every_sensor(tmp_path: Path) -> None:
     assert (dead.display_ok, dead.idle) == (False, None)
 
 
+def test_gather_survives_corrupt_sensor_data(tmp_path: Path) -> None:
+    """A corrupt claim or undecodable tool output never kills the tick."""
+    cfg = _cfg(tmp_path)
+    assert cfg.claims_dir is not None
+    cfg.claims_dir.mkdir()
+    (cfg.claims_dir / "bad.json").write_bytes(b'{"app": "\xff", "grab": "x"}')
+    (cfg.claims_dir / "deep.json").write_bytes(b"[" * 100_000 + b"]" * 100_000)
+    snap = gather(cfg, ReportStore(), lambda _argv: None)
+    assert snap.paused_by is None
+
+
 def test_tick_publishes_signed_and_logs(tmp_path: Path) -> None:
     cfg = _cfg(tmp_path)
     w = Watcher(cfg, gather_fn=lambda _c, _s: _snap(SinkInput(9, "mpv", "x")))

@@ -15,30 +15,51 @@ const ENDPOINT = "http://127.0.0.1:__PORT__/report";
 const HEARTBEAT_MS = 5000;
 const api = globalThis.browser ?? globalThis.chrome;
 
+// Every window type, so the report describes the window that REALLY has
+// focus (a popup, an app window, a private window when the browser grants
+// this extension private access -- manifest "incognito": "spanning").
+// Without that grant a private window stays invisible here and the last
+// visible window is reported with focused: false; the daemon fails closed.
+const WINDOW_FILTERS = [
+  { windowTypes: ["normal", "popup", "panel", "app", "devtools"] },
+  {}, // a browser that rejects one of those types: its default filter
+];
+
 let timer = null;
 
-async function activeTab() {
-  let win = null;
-  try {
-    win = await api.windows.getLastFocused({ windowTypes: ["normal"] });
-  } catch (_err) {
-    win = null;
+async function lastFocusedWindow() {
+  for (const filter of WINDOW_FILTERS) {
+    try {
+      return await api.windows.getLastFocused(filter);
+    } catch (_err) {
+      // try the next filter
+    }
   }
+  return null;
+}
+
+async function activeTab() {
+  const win = await lastFocusedWindow();
   if (!win) {
-    return { tab: {}, focused: false };
+    return { tab: {}, focused: false, incognito: false };
   }
   const tabs = await api.tabs.query({ active: true, windowId: win.id });
-  return { tab: tabs[0] ?? {}, focused: Boolean(win.focused) };
+  return {
+    tab: tabs[0] ?? {},
+    focused: Boolean(win.focused),
+    incognito: Boolean(win.incognito),
+  };
 }
 
 async function snapshot() {
-  const { tab, focused } = await activeTab();
+  const { tab, focused, incognito } = await activeTab();
   const audible = await api.tabs.query({ audible: true });
   return {
     browser: BROWSER,
     url: tab.url ?? "",
     title: tab.title ?? "",
     focused,
+    incognito,
     audible: audible
       .filter((t) => !(t.mutedInfo && t.mutedInfo.muted))
       .map((t) => t.url ?? ""),

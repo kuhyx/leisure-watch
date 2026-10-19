@@ -60,14 +60,25 @@ def godot_free(pid: int, src_root: Path) -> bool:
     return True
 
 
-def _mentions_wsg(argv: tuple[str, ...]) -> bool:
-    return any(Path(arg).name in _WSG_NAMES for arg in argv)
+def _wsg_subcommand(argv: tuple[str, ...]) -> str | None:
+    """The argument right after the wsg-grabber launcher/module, ``""`` if none.
+
+    ``None`` when *argv* is not wsg-grabber at all.
+    """
+    for i, arg in enumerate(argv):
+        if Path(arg).name in _WSG_NAMES:
+            return argv[i + 1] if i + 1 < len(argv) else ""
+    return None
 
 
 def wsg_role(pid: int) -> str | None:
-    """``"scrape"`` (never counts), ``"reviewer"`` (counts) or ``None``."""
+    """``"scrape"`` (never counts), ``"reviewer"`` (counts) or ``None``.
+
+    Scrape only when the subcommand itself is exactly ``scrape``: a reviewer
+    with ``scrape`` anywhere else in its argv (a tag, a path) still counts.
+    """
     for ancestor in _proctree.ancestry(pid):
-        argv = _proctree.argv(ancestor)
-        if _mentions_wsg(argv):
-            return "scrape" if "scrape" in argv else "reviewer"
+        sub = _wsg_subcommand(_proctree.argv(ancestor))
+        if sub is not None:
+            return "scrape" if sub == "scrape" else "reviewer"
     return None

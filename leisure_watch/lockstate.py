@@ -17,12 +17,11 @@ from __future__ import annotations
 
 import errno
 import fcntl
-import json
 import os
 from pathlib import Path
 from typing import Final
 
-from leisure_watch import _proctree
+from leisure_watch import _proctree, _safeio
 
 DESKTOP_UID: Final = 1000
 _CONTENDED: Final = frozenset({errno.EACCES, errno.EAGAIN})
@@ -40,13 +39,9 @@ def default_claims_dir() -> Path:
     return Path(runtime) / "gatelock" / "claims"
 
 
-def _grabbing(text: str) -> tuple[str, int] | None:
-    """(app, rank) if the claim text says its grab is held, else ``None``."""
-    try:
-        raw = json.loads(text)
-    except ValueError:
-        return None
-    if not isinstance(raw, dict):
+def _grabbing(raw: dict[str, object] | None) -> tuple[str, int] | None:
+    """(app, rank) if the decoded claim says its grab is held, else ``None``."""
+    if raw is None:
         return None
     app, grab, rank = raw.get("app"), raw.get("grab"), raw.get("rank", 0)
     if not isinstance(app, str) or not isinstance(grab, str) or type(rank) is not int:
@@ -57,23 +52,37 @@ def _grabbing(text: str) -> tuple[str, int] | None:
     return (app, rank) if held and grab != "none" else None
 
 
-def _owner_alive(path: Path) -> bool:
-    """Whether a live process still holds *path*'s exclusive flock.
+def _owner_alive(fd: int) -> bool:
+    """Whether a live process still holds the claim's exclusive flock.
 
     Probes with a SHARED non-blocking lock: it conflicts only with the
     owner's exclusive one, so two readers (root enforcer + user watcher)
     probing the same dead claim at once both see it as dead.
     """
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
-            except OSError as exc:
-                return exc.errno in _CONTENDED
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            return False
-    except OSError:
-        return False
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    except OSError as exc:
+        return exc.errno in _CONTENDED
+    fcntl.flock(fd, fcntl.LOCK_UN)
+    return False
+
+
+def _live_grab(path: Path) -> tuple[str, int] | None:
+    """(app, rank) of a live claim at *path* holding its grab, else ``None``.
+
+    The dir is user-writable and root reads it, so one fd does it all: opened
+    non-blocking without following symlinks (a FIFO or link is skipped, never
+    waited on), read with a size cap, then flock-probed -- the file probed is
+    the file read. An empty or undecodable claim is never locked.
+    """
+    fd = _safeio.open_regular(path)
+    if fd is None:
+        return None
+    try:
+        claim = _grabbing(_safeio.json_object(_safeio.read_fd(fd)))
+        return claim if claim is not None and _owner_alive(fd) else None
+    finally:
+        os.close(fd)
 
 
 def held_grab_apps(claims_dir: Path | None = None) -> tuple[str, ...]:
@@ -83,12 +92,8 @@ def held_grab_apps(claims_dir: Path | None = None) -> tuple[str, ...]:
         return ()
     found: list[tuple[int, str]] = []
     for path in sorted(directory.glob("*.json")):
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        claim = _grabbing(text) if text.strip() else None
-        if claim is not None and _owner_alive(path):
+        claim = _live_grab(path)
+        if claim is not None:
             found.append((-claim[1], claim[0]))
     return tuple(app for _, app in sorted(found))
 

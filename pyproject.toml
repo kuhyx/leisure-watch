@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leisure-watch"
-version = "0.1.1"
+version = "0.1.2"
 description = "Publishes signed leisure/free/paused facts about what the desktop is doing"
 readme = "README.md"
 license = "MIT"

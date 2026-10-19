@@ -84,6 +84,12 @@ class TestApps:
         assert allow.app_allowed("__main__", "Tk", "Workout Locker")
         assert allow.app_allowed("x", "Tk", "LeetCode Status - 2 left")
 
+    def test_titles_only_free_tk_windows(self, allow: Allowlist) -> None:
+        """An mpv window titled like a locker is still mpv."""
+        assert not allow.app_allowed("mpv", "mpv", "Workout Locker.mkv")
+        assert not allow.title_allowed("Workout Locker.mkv", "mpv")
+        assert allow.title_allowed("Workout Locker", "Tk")
+
     def test_unknown_app(self, allow: Allowlist) -> None:
         assert not allow.app_allowed("mpv", "mpv", "video.mkv")
         assert not allow.app_allowed("__main__", "Tk", "/wsg/ — kept 3")

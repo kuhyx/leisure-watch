@@ -67,14 +67,21 @@ class Allowlist:
         names = (instance.lower(), cls.lower())
         return any(fnmatchcase(n, g) for n in names for g in self.app_globs)
 
-    def title_allowed(self, title: str) -> bool:
-        """Whether a window title starts with an allowlisted title."""
+    def title_allowed(self, title: str, cls: str) -> bool:
+        """Whether a Tk window's title starts with an allowlisted title.
+
+        Tk windows only: they all share the generic ``Tk`` class, so the
+        title is their only name. Any other app titled like a locker (mpv
+        playing ``Workout Locker.mkv``) is still that app.
+        """
+        if cls.lower() != "tk":
+            return False
         lowered = title.lower()
         return any(lowered.startswith(t) for t in self.titles)
 
     def app_allowed(self, instance: str, cls: str, title: str) -> bool:
         """Whether a focused window (WM_CLASS + title) is free."""
-        return self.class_allowed(instance, cls) or self.title_allowed(title)
+        return self.class_allowed(instance, cls) or self.title_allowed(title, cls)
 
     def binary_allowed(self, binary: str) -> bool:
         """Whether audio from a process binary (pipewire) is free."""

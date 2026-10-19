@@ -5,11 +5,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 import fcntl
 import json
+import os
 from typing import IO, TYPE_CHECKING
 
 import pytest
 
 from leisure_watch import lockstate
+from tests._safe_helpers import call_within
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -138,8 +140,8 @@ class TestClaimsDir:
             assert lockstate.paused_by() == "gatelock:leetcode_guard"
 
 
-def test_claim_vanishing_before_the_lock(tmp_path: Path) -> None:
-    assert not lockstate._owner_alive(tmp_path / "gone.json")
+def test_claim_vanishing_before_the_open(tmp_path: Path) -> None:
+    assert lockstate._live_grab(tmp_path / "gone.json") is None
 
 
 def test_concurrent_reader_does_not_fake_a_live_owner(tmp_path: Path) -> None:
@@ -156,3 +158,36 @@ def test_probe_never_modifies_the_claims_dir(tmp_path: Path) -> None:
     lockstate.held_grab_apps(tmp_path)
     after = (sorted(p.name for p in tmp_path.iterdir()), path.stat().st_mtime_ns)
     assert before == after
+
+
+class TestHostileClaims:
+    """The claims dir is user-writable and root reads it: skip, never hang/raise."""
+
+    def test_fifo_is_skipped(self, tmp_path: Path) -> None:
+        live = _claim(tmp_path, "live")
+        os.mkfifo(tmp_path / "fifo.json")
+        with _held(live):
+            found = call_within(lambda: lockstate.held_grab_apps(tmp_path))
+        assert found == ("leetcode_guard",)
+
+    def test_symlink_is_skipped(self, tmp_path: Path) -> None:
+        target = _claim(tmp_path / "elsewhere", "a")
+        claims = tmp_path / "claims"
+        claims.mkdir()
+        (claims / "a.json").symlink_to(target)
+        with _held(target):
+            assert lockstate.held_grab_apps(claims) == ()
+
+    @pytest.mark.parametrize(
+        "data", [b"[" * 100_000 + b"]" * 100_000, b'{"app": "\xff", "grab": "x"}']
+    )
+    def test_undecodable_is_skipped(self, tmp_path: Path, data: bytes) -> None:
+        path = tmp_path / "x.json"
+        path.write_bytes(data)
+        with _held(path):
+            assert lockstate.held_grab_apps(tmp_path) == ()
+
+    def test_oversize_is_skipped(self, tmp_path: Path) -> None:
+        path = _claim(tmp_path, "a", pad="x" * 70_000)
+        with _held(path):
+            assert lockstate.held_grab_apps(tmp_path) == ()

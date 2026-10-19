@@ -62,6 +62,23 @@ class TestWsg:
         fake_pid(fake_proc, 21, "mpv", "--wid=1", ppid=20)
         assert wsg_role(21) == "reviewer"
 
+    @pytest.mark.parametrize(
+        ("argv", "role"),
+        [
+            (("wsg-grabber", "scrape", "--all"), "scrape"),
+            (("python3", "-m", "wsg_grabber", "scrape"), "scrape"),
+            (("wsg-grabber", "review", "--tag", "scrape"), "reviewer"),
+            (("python3", "-m", "wsg_grabber", "review", "scrape"), "reviewer"),
+            (("python3", "scrape", "-m", "wsg_grabber"), "reviewer"),
+            (("/usr/bin/wsg-grabber",), "reviewer"),
+        ],
+    )
+    def test_scrape_only_as_the_subcommand(
+        self, fake_proc: Path, argv: tuple[str, ...], role: str
+    ) -> None:
+        fake_pid(fake_proc, 40, *argv)
+        assert wsg_role(40) == role
+
     def test_unrelated(self, fake_proc: Path) -> None:
         fake_pid(fake_proc, 30, "mpv", "x.mkv")
         assert wsg_role(30) is None

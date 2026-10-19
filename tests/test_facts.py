@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import hmac
 import json
+import os
 import stat
 from typing import TYPE_CHECKING
 
 import pytest
 
-from leisure_watch import facts
+from leisure_watch import _safeio, facts
 from leisure_watch.facts import Focus, Now, Reason, read_now, write_now
+from tests._safe_helpers import call_within
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -183,3 +186,46 @@ def test_bad_focus_fields() -> None:
     assert facts.parse_doc(doc) is None
     doc["focus"] = {"app": "a", "title": "t", "domain": None, "idle": "no"}
     assert facts.parse_doc(doc) is None
+
+
+class TestHostileFiles:
+    """Root reads now.json from a user-writable dir: nothing there may hang or raise."""
+
+    @pytest.mark.parametrize(
+        "data", [b"[" * 100_000 + b"]" * 100_000, b'{"v": 1, "sig": "\xff"}']
+    )
+    def test_undecodable(self, tmp_path: Path, key_file: Path, data: bytes) -> None:
+        path = tmp_path / "now.json"
+        path.write_bytes(data)
+        assert read_now(path, TS, key_file=key_file) is None
+
+    def test_fifo_does_not_block(self, tmp_path: Path, key_file: Path) -> None:
+        path = tmp_path / "now.json"
+        os.mkfifo(path)
+        assert call_within(lambda: read_now(path, TS, key_file=key_file)) is None
+
+    def test_symlink_is_not_followed(self, tmp_path: Path, key_file: Path) -> None:
+        real = tmp_path / "real.json"
+        write_now(real, _now(), key_file)
+        link = tmp_path / "now.json"
+        link.symlink_to(real)
+        assert read_now(link, TS, key_file=key_file) is None
+
+    def test_oversize(self, tmp_path: Path, key_file: Path) -> None:
+        label = "x" * (_safeio.MAX_BYTES + 1)
+        big = replace(_now(), reasons=(Reason("focus", "app:x", None, label),))
+        path = tmp_path / "now.json"
+        write_now(path, big, key_file)
+        assert read_now(path, TS, key_file=key_file) is None
+
+    def test_recursion_while_verifying(
+        self, tmp_path: Path, key_file: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "now.json"
+        write_now(path, _now(), key_file)
+
+        def deep(*_a: object) -> str:
+            raise RecursionError
+
+        monkeypatch.setattr("leisure_watch.facts.signature", deep)
+        assert read_now(path, TS, key_file=key_file) is None

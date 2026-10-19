@@ -71,12 +71,22 @@ class TestParse:
             {"audible": [1]},
             {"audible": ["u"] * 101},
             {"url": "x" * 9000},
+            {"incognito": "yes"},
         ],
     )
     def test_rejects(self, change: dict[str, object]) -> None:
         assert parse_report(json.dumps({**GOOD, **change}).encode(), 1.0) is None
 
-    @pytest.mark.parametrize("body", [b"{bad", b"[1]", b"\xff"])
+    def test_incognito_flag(self) -> None:
+        old = parse_report(json.dumps(GOOD).encode(), 1.0)
+        new = parse_report(json.dumps({**GOOD, "incognito": True}).encode(), 1.0)
+        assert old is not None
+        assert new is not None
+        assert (old.incognito, new.incognito) == (False, True)
+
+    @pytest.mark.parametrize(
+        "body", [b"{bad", b"[1]", b"\xff", b"[" * 100_000 + b"]" * 100_000]
+    )
     def test_rejects_non_objects(self, body: bytes) -> None:
         assert parse_report(body, 1.0) is None
 

@@ -51,13 +51,25 @@ class TestFocus:
         run = _runner({ROOT: "_NET_ACTIVE_WINDOW(WINDOW): window id # 0x0"})
         assert focused_window(run) == (True, None)
 
-    def test_property_not_set_is_desktop(self) -> None:
+    def test_property_not_set_is_unreadable(self) -> None:
+        """i3 always sets _NET_ACTIVE_WINDOW (0 = none); absent means unknown."""
         run = _runner({ROOT: "_NET_ACTIVE_WINDOW:  not found."})
-        assert focused_window(run) == (True, None)
+        assert focused_window(run) == (True, _sensors.UNREADABLE)
 
-    def test_vanished_window_is_desktop(self) -> None:
+    def test_vanished_window_is_unreadable(self) -> None:
         run = _runner({ROOT: "window id # 0x1800003", PROPQ: None})
-        assert focused_window(run) == (True, None)
+        assert focused_window(run) == (True, _sensors.UNREADABLE)
+
+    def test_window_without_any_props_is_unreadable(self) -> None:
+        props = "_NET_WM_PID:  not found.\nWM_CLASS:  not found.\n"
+        run = _runner({ROOT: "window id # 0x1800003", PROPQ: props})
+        assert focused_window(run) == (True, _sensors.UNREADABLE)
+        assert not _sensors.UNREADABLE.readable
+
+    def test_title_alone_is_readable(self) -> None:
+        props = 'WM_NAME(STRING) = "bash"\n'
+        run = _runner({ROOT: "window id # 0x1800003", PROPQ: props})
+        assert focused_window(run) == (True, Window(0, "", "", "bash"))
 
     def test_unreachable_display(self) -> None:
         assert focused_window(_runner({})) == (False, None)
@@ -101,7 +113,14 @@ class TestSinkInputs:
         assert [s.pid for s in sink_inputs(_runner({PACTL: json.dumps(doc)}))] == [0, 0]
 
     @pytest.mark.parametrize(
-        "out", [None, "{bad", '{"a": 1}', '[1, {"corked": false, "properties": 3}]']
+        "out",
+        [
+            None,
+            "{bad",
+            '{"a": 1}',
+            '[1, {"corked": false, "properties": 3}]',
+            "[" * 100_000 + "]" * 100_000,
+        ],
     )
     def test_garbage(self, out: str | None) -> None:
         assert sink_inputs(_runner({PACTL: out})) == ()
@@ -142,3 +161,8 @@ class TestRun:
 
         monkeypatch.setattr("leisure_watch._sensors.subprocess.run", fake)
         assert _sensors.run(["x"]) is None
+
+    def test_non_utf8_output_is_none(self) -> None:
+        """Real decode path: undecodable tool output is a failure, not a crash."""
+        assert _sensors.run(["printf", "\\377"]) is None
+        assert _sensors.run(["printf", "ok"]) == "ok"

@@ -38,6 +38,12 @@ class Window:
     instance: str
     cls: str
     title: str
+    readable: bool = True
+
+
+# A window is focused but none of its properties could be read (it vanished,
+# or the WM published no _NET_ACTIVE_WINDOW): the classifier fails closed.
+UNREADABLE: Final = Window(0, "", "", "", readable=False)
 
 
 @dataclass(frozen=True)
@@ -58,17 +64,20 @@ def desktop_env() -> dict[str, str]:
 
 
 def run(argv: Sequence[str]) -> str | None:
-    """Run a fixed argv; stdout on exit 0, ``None`` on any failure."""
+    """Run a fixed argv; stdout on exit 0, ``None`` on any failure.
+
+    Output that is not UTF-8 is a failure too, never an exception.
+    """
     try:
         done = subprocess.run(
             list(argv),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
             timeout=_TIMEOUT,
             env=desktop_env(),
             check=False,
         )
-    except OSError, subprocess.TimeoutExpired:
+    except OSError, UnicodeDecodeError, subprocess.TimeoutExpired:
         return None
     return done.stdout if done.returncode == 0 else None
 
@@ -78,29 +87,39 @@ def _unescape(text: str) -> str:
 
 
 def focused_window(run: Runner) -> tuple[bool, Window | None]:
-    """``(display_reachable, window)``; ``window`` is ``None`` for the desktop."""
+    """``(display_reachable, window)``.
+
+    ``window`` is ``None`` only when _NET_ACTIVE_WINDOW is genuinely 0 (an
+    empty workspace; i3 always sets it), and :data:`UNREADABLE` when it is
+    missing or the focused window's properties cannot be read.
+    """
     root = run(["xprop", "-root", "_NET_ACTIVE_WINDOW"])
     if not root:
         return False, None
     match = _WID.search(root)
-    if match is None or int(match.group(1), 16) == 0:
+    if match is None:
+        return True, UNREADABLE
+    if int(match.group(1), 16) == 0:
         return True, None
-    props = run(
-        [
-            "xprop",
-            "-id",
-            match.group(1),
-            "_NET_WM_PID",
-            "WM_CLASS",
-            "_NET_WM_NAME",
-            "WM_NAME",
-        ]
+    props = (
+        run(
+            [
+                "xprop",
+                "-id",
+                match.group(1),
+                "_NET_WM_PID",
+                "WM_CLASS",
+                "_NET_WM_NAME",
+                "WM_NAME",
+            ]
+        )
+        or ""
     )
-    if not props:
-        return True, None
     pid = _PID.search(props)
     cls = _CLASS.search(props)
     title = _NET_NAME.search(props) or _WM_NAME.search(props)
+    if pid is None and cls is None and title is None:
+        return True, UNREADABLE
     return True, Window(
         pid=int(pid.group(1)) if pid else 0,
         instance=_unescape(cls.group(1)) if cls else "",
@@ -137,7 +156,7 @@ def sink_inputs(run: Runner) -> tuple[SinkInput, ...]:
     out = run(["pactl", "-f", "json", "list", "sink-inputs"])
     try:
         doc = json.loads(out) if out else []
-    except ValueError:
+    except RecursionError, ValueError:
         return ()
     if not isinstance(doc, list):
         return ()

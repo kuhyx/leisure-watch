@@ -55,7 +55,7 @@ def launcher_switch(config_file: Path) -> _Rules:
     """The enforcer's ``count_launcher_processes`` (default on)."""
     try:
         data = json.loads(config_file.read_text(encoding="utf-8"))
-    except OSError, ValueError:
+    except OSError, RecursionError, ValueError:
         data = {}
     value = (
         data.get("count_launcher_processes", True) if isinstance(data, dict) else True

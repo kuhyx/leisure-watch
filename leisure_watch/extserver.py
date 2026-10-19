@@ -16,7 +16,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from leisure_watch.classify import EXTENSION_BROWSERS, ExtReport
+from leisure_watch._browser import EXTENSION_BROWSERS, ExtReport
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,15 +35,17 @@ def parse_report(body: bytes, received: float) -> ExtReport | None:
     """Validate one report body; ``None`` if anything is off."""
     try:
         raw = json.loads(body)
-    except ValueError:
+    except RecursionError, ValueError:
         return None
     if not isinstance(raw, dict):
         return None
     browser, url, title = raw.get("browser"), raw.get("url"), raw.get("title")
     focused, audible = raw.get("focused"), raw.get("audible")
+    incognito = raw.get("incognito", False)  # absent from pre-0.1.2 builds
     if not (
         browser in EXTENSION_BROWSERS
         and isinstance(focused, bool)
+        and isinstance(incognito, bool)
         and isinstance(url, str)
         and isinstance(title, str)
         and isinstance(audible, list)
@@ -53,7 +55,9 @@ def parse_report(body: bytes, received: float) -> ExtReport | None:
     too_big = len(url) > _MAX_URL or len(title) > _MAX_TITLE
     if too_big or len(audible) > _MAX_AUDIBLE or len(urls) != len(audible):
         return None
-    return ExtReport(str(browser), url, title, focused, tuple(urls), received)
+    return ExtReport(
+        str(browser), url, title, focused, tuple(urls), received, incognito
+    )
 
 
 class ReportStore:
