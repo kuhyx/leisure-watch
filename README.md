@@ -36,11 +36,33 @@ Allowlists: `leisure_watch/default_allowlist.toml`, extended by
 ./install.sh                                  # package, extension, user unit
 python3 -m leisure_watch status --json        # the live computed state
 python3 -m leisure_watch report [--day D]     # top leisure keys of a day
+leisure-watch go-live --dry-run               # Phase 2: preflight, writes nothing
+leisure-watch go-live [--force] [--date D]    # Phase 2 on from tomorrow (sudo)
+leisure-watch go-live --undo                  # back to the old budget
 ```
+
+## Phase 2 (dormant until `go-live`)
+
+`go-live` preflights (watcher + fresh `now.json`; both extensions seen in
+24 h, persisted in `~/.local/state/leisure-watch/ext.json`; enforcer active
+with fresh shadow fields; every live gatelock claim has `grab_held`), then
+`sudo install`s tomorrow's gaming day into `/etc/leisure-watch/leisure_from`
+and disables `kuhytrack-budget.timer`. Whether it is on is only ever
+`earned_time.leisure_active(gaming_day)`.
+
+`GET http://127.0.0.1:8775/status` →
+`{"active", "spent", "allow", "local_hosts", "deny_ports", "used_seconds",
+"budget_seconds", "day"}`. `spent` = enforcer `seconds >= budget_seconds`
+for today's 06:00 day; dormant is never spent; active + unreadable state
+fails closed (spent); another `day_key` = nothing used yet. When active and
+spent the extension sends every non-allowlisted web tab to its bundled
+`spent.html` (same matcher as Python, lists from `/status`). The full
+computed document moved to `GET /now`.
 
 Library API for the root enforcer (stdlib only): `leisure_watch.procscan`,
 `leisure_watch.lockstate.paused_by()`,
-`leisure_watch.facts.read_now(path, now, max_age=15)`.
+`leisure_watch.facts.read_now(path, now, max_age=15)`,
+`leisure_watch.daylog.gaming_day(ts)`.
 
 `kuhytrack/` is the kuhytrack history store, imported with its history via
 git subtree; it keeps its own gates and layout.

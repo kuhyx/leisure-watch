@@ -98,6 +98,34 @@ def held_grab_apps(claims_dir: Path | None = None) -> tuple[str, ...]:
     return tuple(app for _, app in sorted(found))
 
 
+def _live_without_grab_held(path: Path) -> str | None:
+    """The app of a live claim at *path* that lacks ``grab_held``, else ``None``.
+
+    Same one-fd discipline as :func:`_live_grab`; undecodable claims are
+    never locked.
+    """
+    fd = _safeio.open_regular(path)
+    if fd is None:
+        return None
+    try:
+        raw = _safeio.json_object(_safeio.read_fd(fd))
+        if raw is None or isinstance(raw.get("grab_held"), bool):
+            return None
+        app = raw.get("app")
+        return (app if isinstance(app, str) else "?") if _owner_alive(fd) else None
+    finally:
+        os.close(fd)
+
+
+def claims_without_grab_held(claims_dir: Path | None = None) -> tuple[str, ...]:
+    """Apps of live claims written by a pre-C2 gatelock (no ``grab_held``)."""
+    directory = default_claims_dir() if claims_dir is None else claims_dir
+    if not directory.is_dir():
+        return ()
+    found = (_live_without_grab_held(p) for p in sorted(directory.glob("*.json")))
+    return tuple(app for app in found if app is not None)
+
+
 def paused_by(claims_dir: Path | None = None) -> str | None:
     """``"gatelock:<app>"``, ``"i3lock"`` or ``None`` (not paused)."""
     apps = held_grab_apps(claims_dir)

@@ -11,7 +11,7 @@ import pytest
 from leisure_watch.extserver import ExtensionServer, ReportStore, parse_report
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 ORIGIN = "chrome-extension://abcdef"
 GOOD = {
@@ -27,9 +27,11 @@ GOOD = {
 @pytest.fixture
 def server() -> Iterator[tuple[ExtensionServer, list[int]]]:
     calls: list[int] = []
-    srv = ExtensionServer(
-        0, ReportStore(), lambda: calls.append(1), lambda: {"state": "free"}
-    )
+    routes: dict[str, Callable[[], dict[str, object]]] = {
+        "/now": lambda: {"state": "free"},
+        "/status": lambda: {"active": True},
+    }
+    srv = ExtensionServer(0, ReportStore(), lambda: calls.append(1), routes)
     srv.start()
     yield srv, calls
     srv.stop()
@@ -154,15 +156,27 @@ class TestServer:
 
     def test_status(self, server: tuple[ExtensionServer, list[int]]) -> None:
         srv, _ = server
-        status, _, body = _request(srv, "GET", "/status")
+        status, _, body = _request(srv, "GET", "/now")
         assert (status, json.loads(body)) == (200, {"state": "free"})
         assert _request(srv, "GET", "/other")[0] == 404
+
+    def test_status_is_readable_by_an_extension(
+        self, server: tuple[ExtensionServer, list[int]]
+    ) -> None:
+        srv, _ = server
+        status, headers, body = _request(
+            srv, "GET", "/status", headers={"Origin": ORIGIN}
+        )
+        assert (status, json.loads(body)) == (200, {"active": True})
+        assert headers["Access-Control-Allow-Origin"] == ORIGIN
+        _, plain, _ = _request(srv, "GET", "/status", headers={"Origin": "https://x"})
+        assert "Access-Control-Allow-Origin" not in plain
 
     def test_status_error_is_500(self) -> None:
         def boom() -> dict[str, object]:
             raise RuntimeError
 
-        srv = ExtensionServer(0, ReportStore(), lambda: None, boom)
+        srv = ExtensionServer(0, ReportStore(), lambda: None, {"/status": boom})
         srv.start()
         try:
             assert _request(srv, "GET", "/status")[0] == 500

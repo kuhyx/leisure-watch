@@ -41,7 +41,18 @@ ensure_tools() {
     exit 1
 }
 
+readonly EARNED_TIME="earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.15.0#subdirectory=earned_time"
+
+ensure_earned_time() {
+    # --no-deps below never pulls earned-time; install the pin only when the
+    # C6 API is missing (it is usually already there for the enforcer).
+    env -C / python3 -c 'from earned_time import leisure_active' 2> /dev/null && return 0
+    python3 -m pip install --user --break-system-packages --quiet "$EARNED_TIME"
+    log "installed $EARNED_TIME"
+}
+
 install_package() {
+    ensure_earned_time
     python3 -m pip install --user --break-system-packages --no-deps --quiet \
         --force-reinstall "$REPO"
     log "package installed: $(env -C / python3 -c 'import leisure_watch; print(leisure_watch.__file__)')"
@@ -71,6 +82,7 @@ main() {
     "$REPO/scripts/install_helium_extension.sh" "$EXT_OUT/chromium" --no-wrapper
     "$REPO/scripts/install_librewolf_extension.sh" "$EXT_OUT/leisure-watch@kuhy.dev.xpi"
     install_unit
+    log "on PATH: $(command -v leisure-watch || echo "MISSING: add ~/.local/bin to PATH")"
     log "Helium also needs the root wrapper merge once:"
     log "  ! $REPO/scripts/install_helium_extension.sh $EXT_OUT/chromium --wrapper-only"
 }

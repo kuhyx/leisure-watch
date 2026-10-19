@@ -191,3 +191,43 @@ class TestHostileClaims:
         path = _claim(tmp_path, "a", pad="x" * 70_000)
         with _held(path):
             assert lockstate.held_grab_apps(tmp_path) == ()
+
+
+class TestWithoutGrabHeld:
+    """go-live preflight: every LIVE claim must carry ``grab_held`` (C2)."""
+
+    def test_live_old_writer_claim_is_reported(self, tmp_path: Path) -> None:
+        path = _claim(tmp_path, "a", app="meal_gate")
+        with _held(path):
+            assert lockstate.claims_without_grab_held(tmp_path) == ("meal_gate",)
+
+    def test_claims_with_grab_held_pass(self, tmp_path: Path) -> None:
+        a = _claim(tmp_path, "a", grab_held=False)
+        b = _claim(tmp_path, "b", grab="none", grab_held=True)
+        with _held(a), _held(b):
+            assert lockstate.claims_without_grab_held(tmp_path) == ()
+
+    def test_dead_claims_are_ignored(self, tmp_path: Path) -> None:
+        _claim(tmp_path, "a")
+        assert lockstate.claims_without_grab_held(tmp_path) == ()
+
+    def test_unnamed_app(self, tmp_path: Path) -> None:
+        path = _claim(tmp_path, "a", app=7)
+        with _held(path):
+            assert lockstate.claims_without_grab_held(tmp_path) == ("?",)
+
+    @pytest.mark.parametrize("text", ["", "{bad", "[1]"])
+    def test_undecodable_is_never_locked(self, tmp_path: Path, text: str) -> None:
+        tmp_path.joinpath("x.json").write_text(text, encoding="utf-8")
+        assert lockstate.claims_without_grab_held(tmp_path) == ()
+
+    def test_fifo_is_skipped(self, tmp_path: Path) -> None:
+        os.mkfifo(tmp_path / "f.json")
+        assert lockstate.claims_without_grab_held(tmp_path) == ()
+
+    def test_missing_dir_and_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        assert lockstate.claims_without_grab_held(tmp_path / "nope") == ()
+        monkeypatch.setenv("GATELOCK_RUNTIME_DIR", str(tmp_path / "gl"))
+        assert lockstate.claims_without_grab_held() == ()

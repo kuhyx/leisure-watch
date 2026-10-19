@@ -1,6 +1,7 @@
 """Build the Chromium and Firefox variants of the extension from shared JS.
 
-``extension/manifest.base.json`` + ``extension/background.js`` become:
+``extension/manifest.base.json`` + ``extension/allow.js`` (prepended to)
+``extension/background.js`` + the ``spent.html`` page become:
 
 - ``<out>/chromium/`` -- unpacked MV3 with a service worker (Helium
   ``--load-extension``);
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 
 GECKO_ID = "leisure-watch@kuhy.dev"
 _FLAVOURS = {"chromium": "helium", "firefox": "librewolf"}
+_PAGES = ("spent.html", "spent.js")  # copied verbatim
 
 
 def _manifest(base: dict[str, object], flavour: str, port: int) -> dict[str, object]:
@@ -41,7 +43,9 @@ def _manifest(base: dict[str, object], flavour: str, port: int) -> dict[str, obj
 def build(src: Path, out: Path, port: int) -> dict[str, Path]:
     """Write both variants under *out*; return their paths."""
     base = json.loads((src / "manifest.base.json").read_text(encoding="utf-8"))
-    script = (src / "background.js").read_text(encoding="utf-8")
+    script = (src / "allow.js").read_text(encoding="utf-8") + (
+        src / "background.js"
+    ).read_text(encoding="utf-8")
     built: dict[str, Path] = {}
     for flavour, browser in _FLAVOURS.items():
         target = out / flavour
@@ -50,10 +54,12 @@ def build(src: Path, out: Path, port: int) -> dict[str, Path]:
         (target / "manifest.json").write_text(manifest, encoding="utf-8")
         js = script.replace("__BROWSER__", browser).replace("__PORT__", str(port))
         (target / "background.js").write_text(js, encoding="utf-8")
+        for page in _PAGES:
+            (target / page).write_bytes((src / page).read_bytes())
         built[flavour] = target
     xpi = out / f"{GECKO_ID}.xpi"
     with zipfile.ZipFile(xpi, "w", zipfile.ZIP_DEFLATED) as archive:
-        for name in ("manifest.json", "background.js"):
+        for name in ("manifest.json", "background.js", *_PAGES):
             archive.write(built["firefox"] / name, name)
     built["xpi"] = xpi
     return built

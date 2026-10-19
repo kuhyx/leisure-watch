@@ -4,15 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leisure-watch"
-version = "0.1.2"
+version = "0.2.0"
 description = "Publishes signed leisure/free/paused facts about what the desktop is doing"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.14"
-# Stdlib only, on purpose: the root steam-backlog-enforcer imports
-# leisure_watch.{procscan,facts,lockstate} from the desktop user's
-# site-packages, where a third-party import would not resolve.
-dependencies = []
+# The root steam-backlog-enforcer imports leisure_watch.{procscan,facts,
+# lockstate} from the desktop user's site-packages: those stay stdlib-only.
+# earned-time (itself stdlib-only, also in that site) is imported only by the
+# user-side phase2/golive/watcher modules: "is Phase 2 on?" (contract C6).
+dependencies = [
+    "earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.15.0#subdirectory=earned_time",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -84,3 +87,9 @@ warn_unreachable = true
 extra_checks = true
 show_error_codes = true
 exclude = ["^kuhytrack/", "^scripts/file_length/", "^build/"]
+
+# earned_time ships no py.typed; its source is fully annotated, so analyse it
+# instead of typing every import as Any (no ignore comments allowed here).
+[[tool.mypy.overrides]]
+module = ["earned_time", "earned_time.*"]
+follow_untyped_imports = true

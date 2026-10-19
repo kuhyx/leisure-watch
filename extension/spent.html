@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Leisure spent</title>
+    <style>
+      /* unified-design-system tokens: ink / text-on-dark / muted / warning */
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #211d1b;
+        color: #eceae9;
+        font: 16px/1.5 system-ui, sans-serif;
+      }
+      main {
+        max-width: 32rem;
+        padding: 32px;
+        border: 1px solid #463e3a;
+        border-radius: 8px;
+        background: #2b2624;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 28px;
+        line-height: 1.2;
+        color: #e0a63c;
+      }
+      p {
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: #aaa09a;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Leisure budget spent</h1>
+      <p>Used <strong id="used">?</strong> of <strong id="budget">?</strong> today.</p>
+      <p>Blocked: <span id="site">this site</span></p>
+      <p class="muted">Allowlisted sites still work. A new budget starts at 06:00.</p>
+    </main>
+    <script src="spent.js"></script>
+  </body>
+</html>

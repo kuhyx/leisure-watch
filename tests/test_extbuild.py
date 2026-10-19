@@ -31,4 +31,26 @@ def test_builds_both_variants(tmp_path: Path) -> None:
         in (built["firefox"] / "background.js").read_text()
     )
     with zipfile.ZipFile(built["xpi"]) as archive:
-        assert sorted(archive.namelist()) == ["background.js", "manifest.json"]
+        assert sorted(archive.namelist()) == [
+            "background.js",
+            "manifest.json",
+            "spent.html",
+            "spent.js",
+        ]
+
+
+def test_background_carries_the_shared_matcher_and_the_status_poll(
+    tmp_path: Path,
+) -> None:
+    built = build(SRC, tmp_path, 8775)
+    js = (built["firefox"] / "background.js").read_text()
+    assert "function urlAllowed(" in js
+    assert "127.0.0.1:8775/status" in js
+    assert "__PORT__" not in js
+    assert "__BROWSER__" not in js
+    manifest = json.loads((built["chromium"] / "manifest.json").read_text())
+    assert manifest["version"] == "0.2.0"
+    assert "Blocks nothing" not in manifest["description"]
+    page = (built["chromium"] / "spent.html").read_text()
+    assert '<script src="spent.js"></script>' in page
+    assert "<script>" not in page  # MV3 CSP: no inline script

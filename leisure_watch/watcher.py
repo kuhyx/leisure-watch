@@ -2,7 +2,8 @@
 
 Also recomputes as soon as an extension report arrives (rate-limited to one
 publish per second), keeps the daily classification log, and serves the
-live document on ``GET /status``.
+live document on ``GET /now`` and the Phase-2 one on ``GET /status``.
+Each tick also persists when each browser's extension last reported.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Final
 
-from leisure_watch import _sensors, lockstate, procscan
+from leisure_watch import _sensors, heartbeats, lockstate, phase2, procscan
 from leisure_watch.allowlist import USER_ALLOWLIST, load_allowlist
 from leisure_watch.classify import Settings, Snapshot, classify
 from leisure_watch.daylog import DEFAULT_DIR, DayLog
@@ -44,6 +45,9 @@ class Config:
     allowlist_file: Path | None = USER_ALLOWLIST
     counted_config: Path = procscan.DEFAULT_CONFIG_FILE
     claims_dir: Path | None = None
+    heartbeat_file: Path = field(default_factory=heartbeats.default_file)
+    playtime_state: Path = field(default_factory=phase2.default_state)
+    switch_path: Path = field(default_factory=phase2.default_switch)
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,7 @@ class Watcher:
         self._settings = Settings(allow=load_allowlist(cfg.allowlist_file))
         self._allow_mtime = self._mtime()
         self._daylog = DayLog(cfg.log_dir)
+        self._heartbeats = heartbeats.HeartbeatLog(cfg.heartbeat_file)
         self._wake = threading.Event()
         self._lock = threading.Lock()
         self.seq = 0
@@ -125,6 +130,15 @@ class Watcher:
         """The signed current document, same shape as now.json."""
         return signed_doc(replace(self.compute(), seq=self.seq), self.cfg.key_file)
 
+    def block_status(self) -> dict[str, object]:
+        """The Phase-2 document (active, spent, allowlist) for the extension."""
+        return phase2.block_doc(
+            self._settings.allow,
+            time.time(),
+            self.cfg.switch_path,
+            self.cfg.playtime_state,
+        )
+
     def tick(self) -> Now:
         """Compute, publish and log one moment."""
         with self._lock:
@@ -137,6 +151,7 @@ class Watcher:
             self._last_ts = now.ts
             self._daylog.add(now, dt)
             self._daylog.flush()
+            self._heartbeats.update(self.store.snapshot())
             return now
 
     def wake(self) -> None:
@@ -145,7 +160,8 @@ class Watcher:
 
     def run(self, stop: threading.Event) -> None:
         """Serve and publish until *stop* is set."""
-        server = ExtensionServer(self.cfg.port, self.store, self.wake, self.status_doc)
+        routes = {"/now": self.status_doc, "/status": self.block_status}
+        server = ExtensionServer(self.cfg.port, self.store, self.wake, routes)
         server.start()
         logger.info(
             "leisure-watch on 127.0.0.1:%d -> %s", server.port, self.cfg.now_path

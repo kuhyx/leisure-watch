@@ -3,9 +3,13 @@
 Shared spec + cross-repo contracts: `TODO-leisure-rollout.md` (decisions are
 final; do not re-ask). This repo owns contract C3 (`now.json`).
 
-- Package `leisure_watch/` is **stdlib-only** (root imports it). Tests in
-  `tests/`, 100% branch coverage. `kuhytrack/` is a subtree import with its
-  own gates: root gates exclude it; do not restructure it.
+- Root-imported modules (`procscan`, `facts`, `lockstate`, `daylog`, `_safeio`)
+  are **stdlib-only**; only user-side `phase2`/`golive`/`watcher` import
+  `earned_time` (exact-pinned git tag). Never read the C6 switch file
+  yourself: ask `earned_time.leisure_active(day, path=...)`. Tests in
+  `tests/`, 100% branch coverage; conftest redirects the switch file.
+  `kuhytrack/` is a subtree import with its own gates: root gates exclude
+  it; do not restructure it.
 - `leisure_watch.procscan` must stay importable 1:1 by
   steam-backlog-enforcer (same public names as its originals).
 - Every action < 60 s: use `scripts/test_changed.sh` for the inner loop.

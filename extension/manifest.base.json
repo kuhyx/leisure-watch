@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "leisure-watch",
-  "version": "0.1.2",
-  "description": "Reports the active tab and audible tabs to the local leisure-watch daemon. Blocks nothing.",
+  "version": "0.2.0",
+  "description": "Reports the active tab to the local leisure-watch daemon; once the leisure budget is spent, blocks non-allowlisted sites.",
   "incognito": "spanning",
   "permissions": ["tabs", "alarms"],
   "host_permissions": ["http://127.0.0.1/*"]

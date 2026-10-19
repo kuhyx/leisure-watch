@@ -161,7 +161,55 @@ Known limits: private windows count until kuhy grants "Allow in Incognito"
 endpoint trusts any local process sending an extension Origin; root imports
 leisure_watch from the user site-packages (existing pattern).
 
-## Phase 2 (separate session, after kuhy OKs the shadow week)
-Set `LEISURE_FROM` = next day; extension blocking + root kill of
-non-allowlisted apps at 0; "Leisure" labels; remove `kuhytrack-budget.timer`;
-archive GitHub `kuhyx/kuhytrack` (confirm first).
+## Phase 2 — built dormant now, enabled by ONE command (decided 2026-10-19)
+
+Enabling = `leisure-watch go-live` (no code edits, tags or re-pins). Undo =
+`leisure-watch go-live --undo`. Until then every Phase-2 path is dormant and
+the shadow week keeps exercising it ("would kill/block" lists).
+
+### C6 switch file (earned_time 0.15.0 owns the reader)
+- `/etc/leisure-watch/leisure_from`: one line `YYYY-MM-DD`, root:root 0644.
+- `earned_time.leisure_from() -> date`: parsed file date if the file is a
+  regular, small, parseable file; else the parked `LEISURE_FROM`
+  (2027-01-01). Never raises. Path is a module constant + optional `path=`
+  parameter for tests.
+- `earned_time.leisure_active(day) -> bool` = `day >= leisure_from()`.
+  `gaming_base_minutes_for` / `gaming_ceiling_minutes_for` use
+  `leisure_from()` instead of the constant.
+- Every consumer decides "Phase 2 on today?" ONLY via `leisure_active(day)`
+  (gaming day, 06:00 boundary). No consumer re-reads the file itself.
+
+### `leisure-watch go-live` (runs as kuhy; sudo only for the one write)
+- Preflight, refuses unless `--force`: watcher unit active + now.json fresh;
+  extension heartbeat seen in the last 24 h from BOTH helium and librewolf
+  (persist last-seen per browser in ~/.local/state/leisure-watch/);
+  steam-backlog-enforcer active and writing shadow fields; every live gatelock
+  claim carries `grab_held`.
+- Writes TOMORROW's date (never today; refuses an argument date <= today) via
+  `sudo install -D -m 0644 -o root -g root`; disables
+  `kuhytrack-budget.timer` (`systemctl --user disable --now`); prints what
+  activates when. `--undo` removes the file (sudo) and re-enables the timer.
+
+### Behaviour on and after the go-live gaming day
+- Budget: earned_time gives 7 h base / 10 h cap automatically.
+- Enforcer: ENFORCED `seconds` are billed by the leisure rule (today's shadow
+  logic: lock pause, fail-closed, once per wall clock); `budget_seconds` from
+  plain `resolve()`; the 60/30/10/5 warnings + notifications use it. At 0:
+  Steam path as today; kill (SIGTERM, SIGKILL after 30 s, every 3 s tick)
+  every pid that now.json lists as focus/media leisure, EXCEPT browsers; a
+  focused browser that is not reporting (other browsers, unreported private
+  window → now.json `failclosed:<browser>*`) IS killed; now.json stale →
+  kill all known browsers, media players (mpv, vlc, totem, FreeTube) and
+  wsg-grabber until it is fresh again. Shadow fields keep updating (= mirror).
+- Watcher: `GET /status` on the extension port returns
+  `{"active": bool, "spent": bool, "allow": [domains...]}` (spent = enforcer
+  `seconds >= budget_seconds` for today, read from playtime_state.json).
+- Extension: when active && spent, redirect every top-level navigation /
+  active tab on a non-allowlisted domain to a bundled "leisure spent" page
+  (shows used/budget, no bypass button); re-check on every tab update.
+- daily-limits + i3blocks: the 🎮 block becomes `🛋 Leisure …` (same colours
+  logic), the SHADOW block hides itself, shadow alerts + splash stop.
+- Labels: "Leisure" in daily-limits text/GUI and enforcer notifications; JSON
+  keys / identifiers stay `gaming_*`.
+
+### Q7 done separately: archive GitHub kuhyx/kuhytrack with a README pointer.

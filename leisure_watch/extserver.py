@@ -3,8 +3,10 @@
 Binds 127.0.0.1 only. ``POST /report`` accepts a small JSON body from an
 extension origin (``chrome-extension://`` / ``moz-extension://``) -- a web
 page cannot forge that header from a browser, so a page cannot fake a
-"github" report. ``GET /status`` returns the watcher's current computed
-document, so ``leisure-watch status`` sees the live extension data.
+"github" report. ``GET /now`` returns the watcher's current computed
+document, so ``leisure-watch status`` sees the live extension data;
+``GET /status`` is the cheap Phase-2 document the extension polls (active,
+spent, allowlist), readable cross-origin by extension origins only.
 """
 
 from __future__ import annotations
@@ -19,7 +21,9 @@ from typing import TYPE_CHECKING, ClassVar, Final
 from leisure_watch._browser import EXTENSION_BROWSERS, ExtReport
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
+
+    Route = Callable[[], dict[str, object]]
 
 logger = logging.getLogger(__name__)
 
@@ -134,17 +138,18 @@ class _Handler(BaseHTTPRequestHandler):
         self._reply(204, origin=origin)
 
     def do_GET(self) -> None:
-        """Serve the current computed document."""
-        if self.path != "/status":
+        """Serve one computed document (``/now``, ``/status``)."""
+        route = self.owner.routes.get(self.path)
+        if route is None:
             self._reply(404)
             return
         try:
-            body = json.dumps(self.owner.status(), ensure_ascii=False).encode()
+            body = json.dumps(route(), ensure_ascii=False).encode()
         except Exception:
-            logger.exception("status computation failed")
+            logger.exception("%s computation failed", self.path)
             self._reply(500)
             return
-        self._reply(200, body)
+        self._reply(200, body, origin=self._origin())
 
 
 class ExtensionServer:
@@ -155,12 +160,12 @@ class ExtensionServer:
         port: int,
         store: ReportStore,
         on_report: Callable[[], None],
-        status: Callable[[], dict[str, object]],
+        routes: Mapping[str, Route],
     ) -> None:
-        """Bind now; serve after :meth:`start`."""
+        """Bind now; serve after :meth:`start`. *routes*: GET path -> doc."""
         self.store = store
         self.on_report = on_report
-        self.status = status
+        self.routes = dict(routes)
         handler = type("Handler", (_Handler,), {"owner": self})
         self._httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
         self._httpd.daemon_threads = True

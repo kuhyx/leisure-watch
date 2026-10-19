@@ -8,7 +8,8 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from leisure_watch import watcher
+from leisure_watch import heartbeats, watcher
+from leisure_watch._browser import ExtReport
 from leisure_watch._sensors import SinkInput
 from leisure_watch.classify import Snapshot
 from leisure_watch.extserver import ReportStore
@@ -34,6 +35,9 @@ def _cfg(tmp_path: Path, interval: float = 0.05) -> Config:
         allowlist_file=tmp_path / "allow.toml",
         counted_config=tmp_path / "sbe.json",
         claims_dir=tmp_path / "claims",
+        heartbeat_file=tmp_path / "state" / "ext.json",
+        playtime_state=tmp_path / "pt.json",
+        switch_path=tmp_path / "leisure_from",
     )
 
 
@@ -143,3 +147,33 @@ def test_run_serves_and_wakes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     assert not thread.is_alive()
     assert len(calls) >= 3
     assert json.loads(cfg.now_path.read_text(encoding="utf-8"))["state"] == "free"
+
+
+def test_tick_persists_extension_heartbeats(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    store = ReportStore()
+    store.update(ExtReport("librewolf", "about:blank", "", False, (), 1234.0))
+    w = Watcher(cfg, store=store, gather_fn=lambda _c, _s: _snap())
+    w.tick()
+    assert heartbeats.load(cfg.heartbeat_file) == {"librewolf": 1234.0}
+
+
+def test_block_status(tmp_path: Path) -> None:
+    cfg = _cfg(tmp_path)
+    w = Watcher(cfg, gather_fn=lambda _c, _s: _snap())
+    doc = w.block_status()
+    assert (doc["active"], doc["spent"]) == (False, False)
+    cfg.switch_path.write_text("2026-01-01\n", encoding="ascii")
+    doc = w.block_status()
+    assert (doc["active"], doc["spent"]) == (True, True)  # no state: fail closed
+    allow = doc["allow"]
+    assert isinstance(allow, list)
+    assert "github.com" in allow
+
+
+def test_default_config_paths_follow_the_patched_modules(
+    fake_switch: Path, fake_state: Path
+) -> None:
+    cfg = Config()
+    assert (cfg.switch_path, cfg.playtime_state) == (fake_switch, fake_state)
+    assert cfg.heartbeat_file == heartbeats.default_file()

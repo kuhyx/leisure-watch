@@ -1,4 +1,4 @@
-"""``python -m leisure_watch {run,status,report,build-extension}``."""
+"""``python -m leisure_watch {run,status,report,build-extension,go-live}``."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import threading
 import time
 import urllib.request
 
-from leisure_watch import _extbuild
+from leisure_watch import _extbuild, golive
 from leisure_watch.daylog import DEFAULT_DIR, gaming_day, render_report
 from leisure_watch.extserver import PORT
 from leisure_watch.watcher import Config, Watcher
@@ -40,6 +40,26 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("src", type=Path)
     build.add_argument("out", type=Path)
     build.add_argument("--port", type=int, default=PORT)
+    live = sub.add_parser(
+        "go-live",
+        help="switch the leisure budget on from tomorrow (sudo for one file)",
+        description=(
+            "Preflight, then write tomorrow's gaming day to "
+            "/etc/leisure-watch/leisure_from (sudo install) and disable "
+            "kuhytrack-budget.timer. --undo removes it and re-enables the timer."
+        ),
+    )
+    live.add_argument("--force", action="store_true", help="go past failed checks")
+    live.add_argument("--undo", action="store_true", help="remove the switch file")
+    live.add_argument(
+        "--dry-run", action="store_true", help="preflight + print; write nothing"
+    )
+    live.add_argument(
+        "--date",
+        type=date.fromisoformat,
+        default=None,
+        help="first leisure day (default: tomorrow; must be after today)",
+    )
     return parser
 
 
@@ -62,7 +82,7 @@ def _cmd_run() -> int:
 
 def live_status(port: int | None = None) -> dict[str, object] | None:
     """The running watcher's document (it has the extension data), or ``None``."""
-    url = f"http://127.0.0.1:{PORT if port is None else port}/status"
+    url = f"http://127.0.0.1:{PORT if port is None else port}/now"
     try:
         with urllib.request.urlopen(url, timeout=3) as resp:
             doc = json.loads(resp.read())
@@ -100,6 +120,13 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run()
     if args.cmd == "status":
         return _cmd_status(as_json=args.json)
+    if args.cmd == "go-live":
+        env = golive.default_env(_out)
+        if args.undo:
+            return golive.undo(env, dry_run=args.dry_run)
+        return golive.go_live(
+            env, force=args.force, dry_run=args.dry_run, day=args.date
+        )
     if args.cmd == "report":
         day = args.day or gaming_day(time.time())
         _out(render_report(DEFAULT_DIR, day, top=args.top))

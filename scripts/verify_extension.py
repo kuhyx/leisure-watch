@@ -65,7 +65,9 @@ class RecordingStore(ReportStore):
         self.log.append(report)
 
 
-def _helium_cmd(work: Path, port: int, mode: str) -> list[str]:
+def _helium_cmd(
+    work: Path, port: int, mode: str, url: str = "about:blank", *, headless: bool = True
+) -> list[str]:
     first = build(REPO / "extension", work / "a", port)["chromium"]
     flags = [f"--load-extension={first}"]
     if mode != "single":
@@ -76,16 +78,20 @@ def _helium_cmd(work: Path, port: int, mode: str) -> list[str]:
         flags = [joined] if mode == "comma" else [*flags, f"--load-extension={second}"]
     return [
         HELIUM,
-        "--headless=new",
+        *(["--headless=new"] if headless else []),
         "--no-first-run",
+        "--no-default-browser-check",
+        "--password-store=basic",
         "--disable-gpu",
         f"--user-data-dir={work / 'profile'}",
         *flags,
-        "about:blank",
+        url,
     ]
 
 
-def _librewolf_cmd(work: Path, port: int) -> list[str]:
+def _librewolf_cmd(
+    work: Path, port: int, url: str = "about:blank", *, headless: bool = True
+) -> list[str]:
     xpi = build(REPO / "extension", work / "ext", port)["xpi"]
     profile = work / "profile"
     (profile / "extensions").mkdir(parents=True)
@@ -93,11 +99,11 @@ def _librewolf_cmd(work: Path, port: int) -> list[str]:
     (profile / "user.js").write_text(FIREFOX_PREFS)
     return [
         LIBREWOLF,
-        "--headless",
+        *(["--headless"] if headless else []),
         "--no-remote",
         "--profile",
         str(profile),
-        "about:blank",
+        url,
     ]
 
 
@@ -127,7 +133,7 @@ def main() -> int:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix=f"{args.browser}-", dir=SCRATCH))
     store = RecordingStore()
-    server = ExtensionServer(0, store, lambda: None, dict)
+    server = ExtensionServer(0, store, lambda: None, {})
     server.start()
     cmd = (
         _helium_cmd(work, server.port, args.mode)
