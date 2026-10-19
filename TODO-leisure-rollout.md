@@ -227,3 +227,7 @@ the shadow week keeps exercising it ("would kill/block" lists).
   keys / identifiers stay `gaming_*`.
 
 ### Q7 done separately: archive GitHub kuhyx/kuhytrack with a README pointer.
+
+## Phase 2 status (2026-10-19)
+
+Built dormant: earned_time 0.16.0, leisure-watch 0.2.1, enforcer d2c4ea7, daily-limits ed274f2, i3blocks 66321e55. Enable with `leisure-watch go-live` (preflight needs Helium + LibreWolf started once on extension >= 0.2.1); undo with `leisure-watch go-live --undo`. Two finish-line reviews ran; all fixes landed.
