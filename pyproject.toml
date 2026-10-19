@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leisure-watch"
+version = "0.1.0"
+description = "Publishes signed leisure/free/paused facts about what the desktop is doing"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14"
+# Stdlib only, on purpose: the root steam-backlog-enforcer imports
+# leisure_watch.{procscan,facts,lockstate} from the desktop user's
+# site-packages, where a third-party import would not resolve.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "coverage==7.16.2",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.1",
+]
+
+[project.scripts]
+leisure-watch = "leisure_watch.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["leisure_watch*"]
+
+# default_allowlist.toml must survive a
+# non-editable install, or the installed copy silently runs without them.
+[tool.setuptools.package-data]
+leisure_watch = ["default_allowlist.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+
+[tool.coverage.run]
+branch = true
+source = ["leisure_watch"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "if __name__ == .__main__.:"]
+
+[tool.ruff]
+target-version = "py314"
+extend-exclude = ["kuhytrack", "scripts/file_length"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D203",   # conflicts with D211
+    "D213",   # conflicts with D212
+    "COM812", # formatter handles this
+    "ISC001", # formatter may create these
+    "S603",   # every subprocess here runs a fixed argv, never a shell
+    "CPY001", # personal repo, no copyright policy
+    "PT012",  # conflicts with SIM117 (see steam-backlog-enforcer)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG", "D", "PLC0415", "PLR2004", "S101", "SLF001", "FBT"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["leisure_watch"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unreachable = true
+extra_checks = true
+show_error_codes = true
+exclude = ["^kuhytrack/", "^scripts/file_length/", "^build/"]

@@ -1,0 +1,132 @@
+# Pre-commit configuration for leisure-watch, modelled on steam-backlog-enforcer.
+# Install:  pre-commit install && pre-commit install --hook-type pre-push
+# Run:      pre-commit run --all-files
+#
+# kuhytrack/ is a git-subtree import with its own gates; the root gates leave
+# it alone rather than restructuring it.
+exclude: ^kuhytrack/
+
+default_language_version:
+  python: python3
+default_stages: [pre-commit]
+fail_fast: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: debug-statements
+      - id: name-tests-test
+        args: [--pytest-test-first]
+        exclude: ^tests/(conftest|_[a-z_]+)\.py$
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: check-docstring-first
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: local
+    hooks:
+      - id: no-noqa
+        name: Block noqa comments
+        entry: '(?i)#\s*(noqa|type:\s*ignore)'
+        language: pygrep
+        types: [python]
+      - id: no-ruff-noqa
+        name: Block ruff noqa file-level comments
+        entry: '(?i)#\s*ruff:\s*noqa'
+        language: pygrep
+        types: [python]
+      - id: file-length
+        name: Files must be at most 250 lines
+        entry: bash scripts/check_file_length.sh
+        language: system
+        types: [text]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff
+        exclude: ^scripts/file_length/
+        args: [--fix, --exit-non-zero-on-fix, --show-fixes]
+        types_or: [python, pyi]
+      - id: ruff-format
+        exclude: ^scripts/file_length/
+        types_or: [python, pyi]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.4.0
+    hooks:
+      - id: mypy
+        exclude: ^scripts/
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - pytest==9.1.1
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: [--severity-level=high, --confidence-level=medium]
+        exclude: ^(tests/|scripts/file_length/)
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        # `lazer` is osu!lazer's own name, not a misspelling of laser.
+        args: ["--skip=*.json,*.lock,.git,__pycache__,.venv", "--ignore-words-list=lazer"]
+
+  - repo: local
+    hooks:
+      - id: shellcheck
+        name: shellcheck
+        entry: bash -c 'printf "%s\0" "$@" | xargs -0 -n 40 shellcheck --severity=warning' --
+        language: system
+        types: [shell]
+
+      # Four markdown namespaces (README / CLAUDE* / DOCS* / TODO*); shared gate.
+      - id: md-naming
+        name: markdown naming convention
+        entry: scripts/check_md_naming.sh
+        language: system
+        files: \.(md|markdown)$
+
+      # Every dependency on its ecosystem's newest STABLE release. Runs
+      # without --strict: offline it degrades to the cached answer; CI is
+      # the strict authority.
+      - id: dependency-freshness
+        name: dependencies on newest stable
+        entry: scripts/check_dependency_freshness.sh
+        language: system
+        pass_filenames: true
+        files: >-
+          (pyproject\.toml|requirements.*\.txt|package\.json
+          |\.python-version|\.github/workflows/.*\.ya?ml)$
+
+      # The only pre-push hook: finish_auto.sh stamps HEAD after its gate.
+      - id: gate-stamp
+        name: pushed tree passed the local gate (stamp check)
+        entry: scripts/check_gate_stamp.sh check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: repo-contract
+        name: repo contract (CLAUDE.md Commands + test_changed)
+        entry: scripts/check_repo_contract.sh
+        language: system
+        pass_filenames: false
+        files: ^(CLAUDE\.md|AGENTS\.md|scripts/test_changed\.sh)$
