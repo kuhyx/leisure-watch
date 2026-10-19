@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leisure-watch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Publishes signed leisure/free/paused facts about what the desktop is doing"
 readme = "README.md"
 license = "MIT"
@@ -29,10 +29,10 @@ leisure-watch = "leisure_watch.__main__:main"
 [tool.setuptools.packages.find]
 include = ["leisure_watch*"]
 
-# default_allowlist.toml must survive a
+# default_allowlist.toml and py.typed (strict mypy in consumers) must survive a
 # non-editable install, or the installed copy silently runs without them.
 [tool.setuptools.package-data]
-leisure_watch = ["default_allowlist.toml"]
+leisure_watch = ["default_allowlist.toml", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

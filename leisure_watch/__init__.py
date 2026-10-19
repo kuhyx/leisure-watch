@@ -6,4 +6,4 @@ accountant. Every module is stdlib-only so root can import the library parts
 :mod:`leisure_watch.lockstate`) from the desktop user's site-packages.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
