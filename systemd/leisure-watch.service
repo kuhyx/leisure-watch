@@ -1,0 +1,20 @@
+[Unit]
+Description=leisure-watch: publish signed leisure/free/paused facts (now.json)
+Documentation=file://%h/src/leisure-watch/README.md
+After=graphical-session.target
+
+[Service]
+Type=simple
+# The installed (non-editable) package, run from $HOME so a repo checkout
+# can never shadow it.
+WorkingDirectory=%h
+ExecStart=/usr/bin/python3 -m leisure_watch run
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=5
+
+[Install]
+# default.target, not graphical-session.target: under i3 the latter is not
+# guaranteed to activate. The watcher re-probes X every tick (DISPLAY
+# defaults to :0), so starting before X only means "display unreachable".
+WantedBy=default.target
