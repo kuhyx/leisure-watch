@@ -3,8 +3,9 @@
 Checks (each one line in the report, ``--force`` overrides any failure):
 
 - watcher: ``leisure-watch.service`` active AND ``now.json`` fresh + signed;
-- extension helium / librewolf: a report received in the last 24 h (the
-  watcher persists last-seen per browser, :mod:`leisure_watch.heartbeats`);
+- extension helium / librewolf: a report received in the last 24 h from a
+  build at least :data:`EXTENSION_VERSION` (the watcher persists last-seen
+  and version per browser, :mod:`leisure_watch.heartbeats`);
 - enforcer: ``steam-backlog-enforcer.service`` active AND today's
   ``playtime_state.json`` carries every shadow field, ticked in the last
   minute;
@@ -17,7 +18,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from leisure_watch import facts, heartbeats, lockstate, phase2
-from leisure_watch._browser import EXTENSION_BROWSERS
+from leisure_watch._browser import (
+    EXTENSION_BROWSERS,
+    EXTENSION_VERSION,
+    version_tuple,
+)
 from leisure_watch.daylog import gaming_day
 
 if TYPE_CHECKING:
@@ -29,7 +34,7 @@ if TYPE_CHECKING:
 WATCHER_UNIT: Final = "leisure-watch.service"
 ENFORCER_UNIT: Final = "steam-backlog-enforcer.service"
 HEARTBEAT_MAX_AGE: Final = 24 * 3600.0
-TICK_MAX_AGE: Final = 60.0
+TICK_MAX_AGE: Final = phase2.TICK_MAX_AGE
 NOW_MAX_AGE: Final = 15.0
 
 
@@ -79,8 +84,18 @@ def _watcher(capture: Capture, src: Sources, ts: float) -> Check:
     return Check("watcher", state == "active" and fresh, detail)
 
 
+def _version_problem(version: str | None) -> str | None:
+    if version is None:
+        return f"version unknown (needs >= {EXTENSION_VERSION})"
+    have, need = version_tuple(version), version_tuple(EXTENSION_VERSION)
+    if have is None or need is None or have < need:
+        return f"version {version} < {EXTENSION_VERSION}"
+    return None
+
+
 def _extensions(src: Sources, ts: float) -> list[Check]:
     seen = heartbeats.load(src.heartbeat_file)
+    versions = heartbeats.load_versions(src.heartbeat_file)
     checks = []
     for browser in EXTENSION_BROWSERS:
         last = seen.get(browser)
@@ -88,8 +103,12 @@ def _extensions(src: Sources, ts: float) -> list[Check]:
             checks.append(Check(f"extension {browser}", ok=False, detail="never seen"))
             continue
         age = ts - last
-        detail = f"last report {age / 3600:.1f} h ago"
-        checks.append(Check(f"extension {browser}", age <= HEARTBEAT_MAX_AGE, detail))
+        problem = _version_problem(versions.get(browser))
+        detail = f"last report {age / 3600:.1f} h ago; " + (
+            problem or f"version {versions.get(browser)}"
+        )
+        ok = age <= HEARTBEAT_MAX_AGE and problem is None
+        checks.append(Check(f"extension {browser}", ok, detail))
     return checks
 
 

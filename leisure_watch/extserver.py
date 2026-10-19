@@ -32,6 +32,7 @@ MAX_BODY: Final = 64 * 1024
 _MAX_URL: Final = 8192
 _MAX_TITLE: Final = 2048
 _MAX_AUDIBLE: Final = 100
+_MAX_VERSION: Final = 32
 _ORIGINS: Final = ("chrome-extension://", "moz-extension://")
 
 
@@ -46,6 +47,7 @@ def parse_report(body: bytes, received: float) -> ExtReport | None:
     browser, url, title = raw.get("browser"), raw.get("url"), raw.get("title")
     focused, audible = raw.get("focused"), raw.get("audible")
     incognito = raw.get("incognito", False)  # absent from pre-0.1.2 builds
+    version = raw.get("version")  # absent from pre-0.2.1 builds
     if not (
         browser in EXTENSION_BROWSERS
         and isinstance(focused, bool)
@@ -53,14 +55,16 @@ def parse_report(body: bytes, received: float) -> ExtReport | None:
         and isinstance(url, str)
         and isinstance(title, str)
         and isinstance(audible, list)
+        and (version is None or isinstance(version, str))
     ):
         return None
     urls = [u for u in audible if isinstance(u, str) and len(u) <= _MAX_URL]
     too_big = len(url) > _MAX_URL or len(title) > _MAX_TITLE
+    too_big = too_big or len(version or "") > _MAX_VERSION
     if too_big or len(audible) > _MAX_AUDIBLE or len(urls) != len(audible):
         return None
     return ExtReport(
-        str(browser), url, title, focused, tuple(urls), received, incognito
+        str(browser), url, title, focused, tuple(urls), received, incognito, version
     )
 
 

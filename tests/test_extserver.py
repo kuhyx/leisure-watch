@@ -79,6 +79,20 @@ class TestParse:
     def test_rejects(self, change: dict[str, object]) -> None:
         assert parse_report(json.dumps({**GOOD, **change}).encode(), 1.0) is None
 
+    @pytest.mark.parametrize(
+        ("value", "expected"), [("0.2.1", "0.2.1"), (None, None), ("", "")]
+    )
+    def test_version(self, value: str | None, expected: str | None) -> None:
+        doc = dict(GOOD) if value is None else {**GOOD, "version": value}
+        report = parse_report(json.dumps(doc).encode(), 1.0)
+        assert report is not None
+        assert report.version == expected
+
+    @pytest.mark.parametrize("value", [3, ["0.2.1"], "9" * 33])
+    def test_rejects_bad_version(self, value: object) -> None:
+        body = json.dumps({**GOOD, "version": value}).encode()
+        assert parse_report(body, 1.0) is None
+
     def test_incognito_flag(self) -> None:
         old = parse_report(json.dumps(GOOD).encode(), 1.0)
         new = parse_report(json.dumps({**GOOD, "incognito": True}).encode(), 1.0)

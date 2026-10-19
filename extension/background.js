@@ -5,8 +5,11 @@
 // prepends allow.js (urlAllowed / shouldBlock).
 //
 // Blocking: every heartbeat and every tab event re-reads GET /status. Only
-// when it says active && spent is any tab on a non-allowlisted web page sent
-// to the bundled spent.html (no bypass). Dormant until go-live's day.
+// when it says active && spent is any tab that is not free (a non-allowlisted
+// web page, file:, view-source:, blob:, data:, ftp:) sent to the bundled
+// spent.html (no bypass). Dormant until go-live's day. The last answer is
+// persisted: while the daemon is unreachable (cold start included), a
+// last-known ACTIVE status blocks as if spent (fail closed) until it answers.
 //
 // Liveness matters more than anything else here: the daemon treats a
 // focused browser whose report is older than 15 s as leisure (fail closed).
@@ -32,9 +35,13 @@ const WINDOW_FILTERS = [
 ];
 
 let timer = null;
-// The last good /status. Kept while the daemon is unreachable (a restart
-// must not open a gap); null until the first answer, i.e. nothing blocked.
+const STORE_KEY = "leisureStatus";
+const SELF = api.runtime.getURL("");
+// The last good /status (memory, else storage); null = never seen one, i.e.
+// nothing is known to be active and nothing is blocked.
 let status = null;
+let reachable = false;
+let loaded = null;
 
 async function lastFocusedWindow() {
   for (const filter of WINDOW_FILTERS) {
@@ -72,6 +79,7 @@ async function snapshot() {
     audible: audible
       .filter((t) => !(t.mutedInfo && t.mutedInfo.muted))
       .map((t) => t.url ?? ""),
+    version: api.runtime.getManifest().version,
     ts: Date.now() / 1000,
   };
 }
@@ -98,24 +106,41 @@ function validStatus(doc) {
     typeof doc.spent === "boolean" &&
     Array.isArray(doc.allow) &&
     Array.isArray(doc.local_hosts) &&
-    Array.isArray(doc.deny_ports)
+    Array.isArray(doc.deny_ports) &&
+    Array.isArray(doc.internal_schemes)
   );
 }
 
+function loadStored() {
+  loaded ??= api.storage.local
+    .get(STORE_KEY)
+    .then((saved) => {
+      if (status === null && validStatus(saved[STORE_KEY] ?? null)) {
+        status = saved[STORE_KEY];
+      }
+    })
+    .catch(() => {});
+  return loaded;
+}
+
 async function refreshStatus() {
+  await loadStored();
+  let doc = null;
   try {
     const resp = await fetch(STATUS, { cache: "no-store" });
-    const doc = resp.ok ? await resp.json() : null;
-    if (validStatus(doc)) {
-      status = doc;
-    }
+    doc = resp.ok ? await resp.json() : null;
   } catch (_err) {
-    // Daemon down or restarting: keep the last known state.
+    // Daemon down or restarting: the last known state, failing closed.
+  }
+  reachable = validStatus(doc);
+  if (reachable && JSON.stringify(doc) !== JSON.stringify(status)) {
+    status = doc;
+    api.storage.local.set({ [STORE_KEY]: doc }).catch(() => {});
   }
 }
 
 function blocking() {
-  return status !== null && status.active && status.spent;
+  return status !== null && status.active && (status.spent || !reachable);
 }
 
 function spentPage(url) {
@@ -138,7 +163,9 @@ async function enforceTab(tab) {
     return;
   }
   // pendingUrl (Chromium): a navigation that has not committed yet.
-  const target = [tab.pendingUrl, tab.url].find((u) => shouldBlock(u, status));
+  const target = [tab.pendingUrl, tab.url].find(
+    (u) => u && !u.startsWith(SELF) && shouldBlock(u, status),
+  );
   if (target) {
     try {
       await api.tabs.update(tab.id, { url: spentPage(target) });

@@ -11,7 +11,7 @@ from leisure_watch._browser import ExtReport
 from leisure_watch._sensors import SinkInput, Window
 from leisure_watch.allowlist import load_allowlist
 from leisure_watch.classify import Settings, Snapshot, classify
-from tests._proc_helpers import fake_pid
+from tests._proc_helpers import fake_pid, fake_start
 
 T = 1_760_000_000.0
 SETTINGS = Settings(allow=load_allowlist(None), src_root=Path("/home/kuhy/src"))
@@ -169,6 +169,26 @@ class TestGamesAndExtensions:
         assert [(r.key, r.label) for r in now.reasons] == [
             ("steam:1091500", "Cyberpunk2077.e"),
             ("proc:osu-lazer", "proc:osu-lazer"),
+        ]
+
+    def test_every_reason_with_a_pid_carries_its_start_time(
+        self, fake_proc: Path
+    ) -> None:
+        fake_pid(fake_proc, 31, "Cyberpunk2077.e")
+        fake_start(fake_proc, 31, 5000)
+        fake_pid(fake_proc, 9, "mpv")
+        fake_start(fake_proc, 9, 6000)
+        snap = replace(
+            BASE,
+            games={31: "app:1091500", 32: "proc:osu-lazer"},
+            sinks=(SinkInput(9, "mpv", "x"), SinkInput(0, "vlc", "y")),
+        )
+        now = classify(snap, SETTINGS)
+        assert [(r.key, r.pid, r.start) for r in now.reasons] == [
+            ("steam:1091500", 31, 5000),
+            ("proc:osu-lazer", 32, None),  # exited meanwhile: no start known
+            ("app:mpv", 9, 6000),
+            ("app:vlc", None, None),
         ]
 
     def test_extension_timestamps(self) -> None:

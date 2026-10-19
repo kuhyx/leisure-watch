@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "leisure-watch"
-version = "0.2.0"
+version = "0.2.1"
 description = "Publishes signed leisure/free/paused facts about what the desktop is doing"
 readme = "README.md"
 license = "MIT"
@@ -14,7 +14,7 @@ requires-python = ">=3.14"
 # earned-time (itself stdlib-only, also in that site) is imported only by the
 # user-side phase2/golive/watcher modules: "is Phase 2 on?" (contract C6).
 dependencies = [
-    "earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.15.0#subdirectory=earned_time",
+    "earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.16.0#subdirectory=earned_time",
 ]
 
 [project.optional-dependencies]

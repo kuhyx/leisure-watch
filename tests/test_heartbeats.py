@@ -14,8 +14,10 @@ if TYPE_CHECKING:
     import pytest
 
 
-def _report(browser: str, received: float) -> ExtReport:
-    return ExtReport(browser, "https://github.com/", "GitHub", True, (), received)
+def _report(browser: str, received: float, version: str | None = None) -> ExtReport:
+    return ExtReport(
+        browser, "https://github.com/", "GitHub", True, (), received, version=version
+    )
 
 
 def test_load_missing_is_empty(tmp_path: Path) -> None:
@@ -79,3 +81,32 @@ def test_write_failure_is_logged_not_raised(
 
 def test_default_path_is_patched(tmp_path: Path) -> None:
     assert heartbeats.default_file() == tmp_path / "state" / "ext.json"
+
+
+def test_versions_are_persisted_and_a_change_is_written_at_once(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ext.json"
+    log = heartbeats.HeartbeatLog(path)
+    log.update({"helium": _report("helium", 1000.0, "0.2.0")})
+    assert heartbeats.load_versions(path) == {"helium": "0.2.0"}
+    log.update({"helium": _report("helium", 1001.0, "0.2.0")})  # throttled
+    assert heartbeats.load(path) == {"helium": 1000.0}
+    log.update({"helium": _report("helium", 1002.0, "0.2.1")})  # new build
+    assert heartbeats.load_versions(path) == {"helium": "0.2.1"}
+    assert heartbeats.load(path) == {"helium": 1002.0}
+    log.update({"helium": _report("helium", 1003.0)})  # no version: kept
+    assert heartbeats.load_versions(path) == {"helium": "0.2.1"}
+    assert heartbeats.HeartbeatLog(path).versions == {"helium": "0.2.1"}
+
+
+def test_load_versions_of_an_old_or_odd_file(tmp_path: Path) -> None:
+    path = tmp_path / "ext.json"
+    path.write_text(json.dumps({"helium": 5.0}))  # 0.2.0 layout: no versions
+    assert heartbeats.load(path) == {"helium": 5.0}
+    assert heartbeats.load_versions(path) == {}
+    path.write_text(json.dumps({"versions": ["x"]}))
+    assert heartbeats.load_versions(path) == {}
+    odd = {"helium": 1, "librewolf": "0.2.1", "chrome": "1.0"}
+    path.write_text(json.dumps({"versions": odd}))
+    assert heartbeats.load_versions(path) == {"librewolf": "0.2.1"}

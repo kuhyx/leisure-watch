@@ -66,7 +66,7 @@ def fake_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture(autouse=True)
 def no_real_commands(monkeypatch: pytest.MonkeyPatch) -> None:
-    """go-live's default runners raise: no test reaches sudo or systemctl."""
+    """Default runners raise: no test reaches sudo or systemctl."""
 
     def refuse(argv: object) -> NoReturn:
         msg = f"test tried to run a real command: {argv!r}"
@@ -74,3 +74,5 @@ def no_real_commands(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("leisure_watch.golive.capture", refuse)
     monkeypatch.setattr("leisure_watch.golive.execute", refuse)
+    # The watcher retires kuhytrack-budget.timer once Phase 2 is on (Q13).
+    monkeypatch.setattr("leisure_watch.watcher.systemctl", refuse)

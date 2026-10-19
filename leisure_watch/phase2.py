@@ -10,6 +10,8 @@ use (``SWITCH_PATH``, looked up at call time so tests can redirect it).
 - dormant (not active): never spent -- nothing is blocked before go-live;
 - active, file unreadable / malformed: spent (fail closed: the browser
   extension blocks rather than let an unknowable budget run free);
+- active, ``last_tick_at`` not within :data:`TICK_MAX_AGE` s: spent too
+  (the enforcer is not running, so nothing is billing the budget);
 - active, ``day_key`` of another day: 0 used yet (the enforcer has not done
   its first tick of the new gaming day; yesterday's total is not today's).
 
@@ -35,6 +37,10 @@ SWITCH_PATH: Path = earned_time.LEISURE_FROM_PATH
 PLAYTIME_STATE: Path = (
     Path.home() / ".config" / "steam_backlog_enforcer" / "playtime_state.json"
 )
+# Retired by the watcher once Phase 2 enforces (Q13); go-live --undo restores it.
+KUHYTRACK_TIMER: Final = "kuhytrack-budget.timer"
+TICK_MAX_AGE: Final = 60.0
+_TICK_SKEW: Final = 2.0  # an enforcer clock a little ahead is tolerated
 SHADOW_KEYS: Final = (
     "shadow_seconds",
     "shadow_budget_seconds",
@@ -91,6 +97,9 @@ def budget_today(
     closed = Budget(None, None, spent=True)
     if doc is None or not isinstance(doc.get("day_key"), str):
         return closed
+    tick = number(doc.get("last_tick_at"))
+    if tick is None or not -_TICK_SKEW <= ts - tick <= TICK_MAX_AGE:
+        return closed
     if doc["day_key"] != gaming_day(ts).isoformat():
         return Budget(0.0, None, spent=False)
     used, budget = number(doc.get("seconds")), number(doc.get("budget_seconds"))
@@ -114,6 +123,7 @@ def block_doc(
         "allow": sorted(allow.domains),
         "local_hosts": sorted(allow.local_hosts),
         "deny_ports": sorted(allow.deny_ports),
+        "internal_schemes": sorted(allow.internal_schemes),
         "used_seconds": budget.used,
         "budget_seconds": budget.budget,
         "day": gaming_day(ts).isoformat(),

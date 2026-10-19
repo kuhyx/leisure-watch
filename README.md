@@ -44,20 +44,32 @@ leisure-watch go-live --undo                  # back to the old budget
 ## Phase 2 (dormant until `go-live`)
 
 `go-live` preflights (watcher + fresh `now.json`; both extensions seen in
-24 h, persisted in `~/.local/state/leisure-watch/ext.json`; enforcer active
-with fresh shadow fields; every live gatelock claim has `grab_held`), then
-`sudo install`s tomorrow's gaming day into `/etc/leisure-watch/leisure_from`
-and disables `kuhytrack-budget.timer`. Whether it is on is only ever
-`earned_time.leisure_active(gaming_day)`.
+24 h running at least the extension version this package ships, both
+persisted in `~/.local/state/leisure-watch/ext.json`; enforcer active with
+fresh shadow fields; every live gatelock claim has `grab_held`), then
+`sudo install`s tomorrow's gaming day (or `--date`, at most 14 days ahead)
+into `/etc/leisure-watch/leisure_from`. Already live = exit 0. The watcher
+disables `kuhytrack-budget.timer` on the first tick of that day (Q13: it
+runs until Phase 2 enforces); `--undo` re-enables it. Whether it is on is
+only ever `earned_time.leisure_active(gaming_day)`.
 
 `GET http://127.0.0.1:8775/status` →
-`{"active", "spent", "allow", "local_hosts", "deny_ports", "used_seconds",
-"budget_seconds", "day"}`. `spent` = enforcer `seconds >= budget_seconds`
-for today's 06:00 day; dormant is never spent; active + unreadable state
-fails closed (spent); another `day_key` = nothing used yet. When active and
-spent the extension sends every non-allowlisted web tab to its bundled
-`spent.html` (same matcher as Python, lists from `/status`). The full
-computed document moved to `GET /now`.
+`{"active", "spent", "allow", "local_hosts", "deny_ports",
+"internal_schemes", "used_seconds", "budget_seconds", "day"}`. `spent` =
+enforcer `seconds >= budget_seconds` for today's 06:00 day; dormant is never
+spent; active + unreadable state, or `last_tick_at` older than 60 s, fails
+closed (spent); another `day_key` = nothing used yet. When active and spent
+the extension sends every tab that is not free (non-allowlisted web pages,
+`file:`, `view-source:`, `blob:`, `data:`, `ftp:`) to its bundled
+`spent.html`; browser-internal schemes stay (same matcher as Python, lists
+from `/status`). It persists the last `/status`: while the daemon is
+unreachable a last-known active status blocks as if spent. Every report
+carries the extension `version`. The full computed document moved to
+`GET /now`.
+
+`now.json` `reasons[]` entries with a pid carry an optional `start`
+(`/proc/<pid>/stat` field 22, raw ticks) so a killer can spare a reused
+pid: `facts.Reason(source, key, pid, label, start=None)`.
 
 Library API for the root enforcer (stdlib only): `leisure_watch.procscan`,
 `leisure_watch.lockstate.paused_by()`,

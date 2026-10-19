@@ -8,7 +8,7 @@ import pytest
 
 from leisure_watch import _proctree
 from leisure_watch._rules import godot_free, is_godot, wsg_role
-from tests._proc_helpers import fake_pid
+from tests._proc_helpers import fake_pid, fake_start
 
 SRC = Path("/home/kuhy/src")
 
@@ -92,6 +92,18 @@ class TestProctree:
         (fake_proc / "3").mkdir()
         (fake_proc / "3" / "stat").write_text("3 (x)", encoding="utf-8")
         assert _proctree.ppid(3) == 0
+
+    def test_start_time_is_stat_field_22(self, fake_proc: Path) -> None:
+        fake_pid(fake_proc, 60, "mpv")
+        fake_start(fake_proc, 60, 987654, ppid=7)
+        assert (_proctree.start_time(60), _proctree.ppid(60)) == (987654, 7)
+        fake_pid(fake_proc, 61, "mpv")  # stat too short
+        assert _proctree.start_time(61) is None
+        assert _proctree.start_time(62) is None  # gone
+        (fake_proc / "63").mkdir()
+        bad = "63 (x) S 1 " + "0 " * 17 + "notanumber"
+        (fake_proc / "63" / "stat").write_text(bad, encoding="utf-8")
+        assert _proctree.start_time(63) is None
 
     def test_cycle_and_init_stop_the_walk(self, fake_proc: Path) -> None:
         fake_pid(fake_proc, 40, ppid=41)

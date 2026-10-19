@@ -47,16 +47,29 @@ WEB = [
     "https://github.com:99999/",
     "http:///nohost",
 ]
+# Not web: the browser's own pages stay free; every other scheme is leisure
+# in the Python classifier, so at 0 the extension must send it away too.
 NOT_WEB = [
     "",
     "about:blank",
+    "ABOUT:config",
     "chrome://newtab/",
+    "chrome-search://local-ntp/",
+    "chrome-untrusted://x/",
     "chrome-extension://abc/spent.html",
-    "moz-extension://abc/spent.html",
-    "file:///home/kuhy/x.html",
+    "moz-extension://abc/spent.html?site=x",
+    "file:///home/kuhy/x.mp4",
+    "FILE:///home/kuhy/x.html",
     "view-source:https://youtube.com/",
+    "view-source:https://github.com/",
+    "blob:https://www.youtube.com/0b1c",
     "data:text/html,hi",
+    "ftp://ftp.example.org/x.mkv",
+    "ftp://github.com/",
+    "javascript:void(0)",
+    "nothing-here",
 ]
+LEISURE_SCHEMES = ["file", "view-source", "blob", "data", "ftp"]
 
 _DRIVER = (
     "const a = require(process.argv[1]);"
@@ -81,16 +94,34 @@ def _node(urls: list[str], status: dict[str, object]) -> list[list[bool]]:
 
 
 @pytest.mark.skipif(NODE is None, reason="node is not installed")
-def test_js_matches_python_on_web_urls() -> None:
+def test_js_matches_python_on_every_url() -> None:
     allow = load_allowlist(None)
     status = phase2.block_doc(allow, 0.0)
-    got = _node(WEB, status)
-    expected = [allow.url_allowed(u) for u in WEB]
+    urls = WEB + NOT_WEB
+    got = _node(urls, status)
+    expected = [allow.url_allowed(u) for u in urls]
     assert [g[0] for g in got] == expected
     assert [g[1] for g in got] == [not e for e in expected]
 
 
 @pytest.mark.skipif(NODE is None, reason="node is not installed")
-def test_browser_internal_pages_are_never_blocked() -> None:
-    status = phase2.block_doc(load_allowlist(None), 0.0)
-    assert [g[1] for g in _node(NOT_WEB, status)] == [False] * len(NOT_WEB)
+def test_other_schemes_are_blocked_internal_ones_are_not() -> None:
+    allow = load_allowlist(None)
+    status = phase2.block_doc(allow, 0.0)
+    internal = allow.internal_schemes
+    got = dict(zip(NOT_WEB, (g[1] for g in _node(NOT_WEB, status)), strict=True))
+    for url, blocked in got.items():
+        scheme = url.partition(":")[0].lower()
+        if not url or scheme in internal:
+            assert blocked is False, url
+        if scheme in LEISURE_SCHEMES:
+            assert blocked is True, url
+
+
+@pytest.mark.skipif(NODE is None, reason="node is not installed")
+def test_internal_schemes_come_from_status() -> None:
+    allow = load_allowlist(None)
+    status = phase2.block_doc(allow, 0.0)
+    assert status["internal_schemes"] == sorted(allow.internal_schemes)
+    status["internal_schemes"] = [*sorted(allow.internal_schemes), "file"]
+    assert _node(["file:///x"], status) == [[True, False]]

@@ -29,7 +29,12 @@ def _switch(path: Path, day: str) -> None:
 
 
 def _state(path: Path, **fields: object) -> None:
-    doc = {"day_key": "2026-10-20", "seconds": 100.0, "budget_seconds": 200.0}
+    doc = {
+        "day_key": "2026-10-20",
+        "seconds": 100.0,
+        "budget_seconds": 200.0,
+        "last_tick_at": NOON - 3,
+    }
     doc.update(fields)
     path.write_text(json.dumps(doc), encoding="utf-8")
 
@@ -111,6 +116,29 @@ class TestBudget:
         assert phase2.budget_today(NOON, is_active=True) == phase2.Budget(
             0.0, None, spent=False
         )
+
+    @pytest.mark.parametrize(
+        ("tick", "spent"),
+        [
+            (NOON - 60, False),
+            (NOON + 2, False),
+            (NOON - 61, True),  # the enforcer stopped ticking: fail closed
+            (NOON + 600, True),  # from the future: not a real tick either
+            (None, True),
+            ("x", True),
+            (True, True),
+        ],
+    )
+    def test_a_stale_enforcer_state_is_spent(
+        self, fake_state: Path, tick: object, *, spent: bool
+    ) -> None:
+        _state(fake_state, last_tick_at=tick)
+        assert phase2.budget_today(NOON, is_active=True).spent is spent
+
+    def test_a_stale_state_of_another_day_is_spent_too(self, fake_state: Path) -> None:
+        # A dead enforcer still carrying yesterday must not read "0 used".
+        _state(fake_state, day_key="2026-10-19", last_tick_at=NOON - 3600)
+        assert phase2.budget_today(NOON, is_active=True).spent is True
 
     def test_explicit_state_path(self, tmp_path: Path) -> None:
         other = tmp_path / "other.json"

@@ -58,7 +58,7 @@ def _parser() -> argparse.ArgumentParser:
         "--date",
         type=date.fromisoformat,
         default=None,
-        help="first leisure day (default: tomorrow; must be after today)",
+        help="first leisure day (default: tomorrow; after today, <= 14 days ahead)",
     )
     return parser
 

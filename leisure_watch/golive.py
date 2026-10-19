@@ -3,8 +3,11 @@
 Runs as the desktop user. ``sudo`` is used for exactly one thing: writing
 (or, with ``--undo``, removing) ``/etc/leisure-watch/leisure_from``. The
 date written is TOMORROW's gaming day (06:00 boundary), never today, so a
-day is never re-priced while it runs. Whether Phase 2 is already on is
-asked of ``earned_time.leisure_active`` -- the file is never parsed here.
+day is never re-priced while it runs (or an explicit ``--date``, at most
+:data:`MAX_AHEAD_DAYS` ahead). Whether Phase 2 is already on is asked of
+``earned_time.leisure_active`` -- the file is never parsed here. The
+kuhytrack budget timer keeps running until Phase 2 enforces (Q13): the
+watcher disables it on the go-live day's first tick, ``--undo`` re-enables.
 """
 
 from __future__ import annotations
@@ -29,7 +32,8 @@ if TYPE_CHECKING:
 
     Execute = Callable[[Sequence[str]], int]
 
-TIMER: Final = "kuhytrack-budget.timer"
+TIMER: Final = phase2.KUHYTRACK_TIMER
+MAX_AHEAD_DAYS: Final = 14
 _INSTALL: Final = ("sudo", "install", "-D", "-m", "0644", "-o", "root", "-g", "root")
 
 
@@ -78,7 +82,7 @@ def _plan(day: date) -> list[str]:
         "  - Helium + LibreWolf extension sends non-allowlisted sites to the",
         '    "leisure spent" page at 0',
         "  - daily-limits/i3bar show Leisure; the SHADOW block + alerts stop",
-        f"  - {TIMER}: disabled now",
+        f"  - {TIMER}: the watcher disables it on {day}'s first tick",
         "Undo any time: leisure-watch go-live --undo",
     ]
 
@@ -94,17 +98,20 @@ def _write_switch(env: Env, day: date) -> bool:
 def go_live(
     env: Env, *, force: bool = False, dry_run: bool = False, day: date | None = None
 ) -> int:
-    """Preflight, write the switch file, disable the kuhytrack timer."""
+    """Preflight, then write the switch file (the watcher retires the timer)."""
     ts = env.clock()
     today = gaming_day(ts)
     target = day or today + timedelta(days=1)
     if target <= today:
         env.out(f"refusing: {target} is not after today's gaming day {today}")
         return 2
+    if target > today + timedelta(days=MAX_AHEAD_DAYS):
+        env.out(f"refusing: {target} is more than {MAX_AHEAD_DAYS} days ahead")
+        return 2
     if earned_time.leisure_active(today, path=env.switch):
         live = earned_time.leisure_from(path=env.switch)
         env.out(f"already live since {live} (undo: leisure-watch go-live --undo)")
-        return 1
+        return 0
     checks = _preflight.preflight(env.capture, env.sources, ts)
     failed = [c for c in checks if not c.ok]
     env.out("preflight:")
@@ -117,7 +124,6 @@ def go_live(
         if refuse:
             env.out("dry run: would refuse (fix the checks above or use --force)")
         env.out(f"dry run: would write {target} to {env.switch} (sudo install)")
-        env.out(f"dry run: would run systemctl --user disable --now {TIMER}")
         for line in _plan(target):
             env.out(line)
         return 1 if refuse else 0
@@ -136,9 +142,6 @@ def _apply(env: Env, target: date) -> int:
         env.out(f"wrote {env.switch} but earned_time reads {seen}; check it")
         return 1
     env.out(f"wrote {target} to {env.switch}")
-    if env.execute(["systemctl", "--user", "disable", "--now", TIMER]) != 0:
-        env.out(f"switch written, but disabling {TIMER} failed: do it by hand")
-        return 1
     for line in _plan(target):
         env.out(line)
     return 0

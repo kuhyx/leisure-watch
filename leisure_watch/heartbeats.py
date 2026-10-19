@@ -3,7 +3,9 @@
 ``leisure-watch go-live`` refuses unless BOTH Helium and LibreWolf reported
 in the last 24 h. The watcher only keeps the latest report in memory, so it
 also records the receive time per browser here, atomically and at most
-once a minute per browser (a 24 h window needs no 5 s resolution).
+once a minute per browser (a 24 h window needs no 5 s resolution). The
+extension version each browser last reported is kept under ``versions``
+(written at once when it changes): go-live wants the current build in both.
 """
 
 from __future__ import annotations
@@ -35,18 +37,29 @@ def default_file() -> Path:
     return DEFAULT_FILE
 
 
+def _doc(path: Path) -> dict[str, object]:
+    return _safeio.json_object(_safeio.read_regular(path)) or {}
+
+
 def load(path: Path) -> dict[str, float]:
     """``{browser: last receive ts}`` for the extension browsers on record."""
-    doc = _safeio.json_object(_safeio.read_regular(path)) or {}
+    doc = _doc(path)
     seen = {b: number(doc.get(b)) for b in EXTENSION_BROWSERS}
     return {b: ts for b, ts in seen.items() if ts is not None}
 
 
-def _save(path: Path, seen: Mapping[str, float]) -> None:
+def load_versions(path: Path) -> dict[str, str]:
+    """``{browser: last reported extension version}`` (none before 0.2.1)."""
+    raw = _doc(path).get("versions")
+    versions = raw if isinstance(raw, dict) else {}
+    return {b: v for b in EXTENSION_BROWSERS if isinstance(v := versions.get(b), str)}
+
+
+def _save(path: Path, seen: Mapping[str, float], versions: Mapping[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".ext-", suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        json.dump(dict(seen), handle, sort_keys=True)
+        json.dump({**seen, "versions": dict(versions)}, handle, sort_keys=True)
     Path(tmp).replace(path)
 
 
@@ -57,26 +70,35 @@ class HeartbeatLog:
         """Start from what is already on disk."""
         self.path = path
         self._saved = load(path)
+        self._versions = load_versions(path)
 
     @property
     def seen(self) -> dict[str, float]:
         """What is on disk now."""
         return dict(self._saved)
 
+    @property
+    def versions(self) -> dict[str, str]:
+        """The extension versions on disk now."""
+        return dict(self._versions)
+
     def update(self, reports: Mapping[str, ExtReport]) -> None:
         """Persist newer receive times (a new browser at once, else per minute)."""
-        merged = dict(self._saved)
+        merged, versions = dict(self._saved), dict(self._versions)
         due = False
         for browser, report in reports.items():
             old = merged.get(browser)
             if old is None or report.received > old:
                 merged[browser] = report.received
                 due = due or old is None or report.received - old >= MIN_GAP
+            if report.version is not None and report.version != versions.get(browser):
+                versions[browser] = report.version
+                due = True
         if not due:
             return
         try:
-            _save(self.path, merged)
+            _save(self.path, merged, versions)
         except OSError:
             logger.warning("could not persist extension heartbeats to %s", self.path)
             return
-        self._saved = merged
+        self._saved, self._versions = merged, versions

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import zipfile
 
+from leisure_watch._browser import EXTENSION_VERSION
 from leisure_watch._extbuild import GECKO_ID, build
 
 SRC = Path(__file__).resolve().parent.parent / "extension"
@@ -49,7 +50,9 @@ def test_background_carries_the_shared_matcher_and_the_status_poll(
     assert "__PORT__" not in js
     assert "__BROWSER__" not in js
     manifest = json.loads((built["chromium"] / "manifest.json").read_text())
-    assert manifest["version"] == "0.2.0"
+    # go-live's preflight requires at least this version from both browsers.
+    assert manifest["version"] == EXTENSION_VERSION == "0.2.1"
+    assert "storage" in manifest["permissions"]  # the persisted last /status
     assert "Blocks nothing" not in manifest["description"]
     page = (built["chromium"] / "spent.html").read_text()
     assert '<script src="spent.js"></script>' in page

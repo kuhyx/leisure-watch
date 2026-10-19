@@ -64,11 +64,13 @@ def test_goes_live_tomorrow(tmp_path: Path, fake_switch: Path) -> None:
     assert golive.go_live(_env(tmp_path, fake_switch, fake)) == 0
     assert fake_switch.read_text() == "2026-10-21\n"
     assert earned_time.leisure_from(fake_switch) == date(2026, 10, 21)
-    assert fake.calls[-1] == ["systemctl", "--user", "disable", "--now", TIMER]
-    assert fake.calls[0][:2] == ["sudo", "install"]
+    # Q13: the timer runs until Phase 2 enforces; the WATCHER disables it on
+    # the first tick of the go-live day, go-live itself never touches it.
+    assert [c[:2] for c in fake.calls] == [["sudo", "install"]]
     text = _text(fake)
     assert "2026-10-21 06:00" in text
     assert "--undo" in text
+    assert f"{TIMER}: the watcher disables it on 2026-10-21" in text
 
 
 def test_before_six_is_still_the_previous_gaming_day(
@@ -98,12 +100,31 @@ def test_refuses_a_day_not_after_today(
     assert "not after" in _text(fake)
 
 
-def test_refuses_when_already_live(tmp_path: Path, fake_switch: Path) -> None:
+@pytest.mark.parametrize(
+    ("day", "code"), [(date(2026, 11, 3), 0), (date(2026, 11, 4), 2)]
+)
+def test_a_date_at_most_14_days_ahead(
+    tmp_path: Path, fake_switch: Path, day: date, code: int
+) -> None:
+    fake = Fake()
+    assert golive.go_live(_env(tmp_path, fake_switch, fake), day=day) == code
+    if code:
+        assert fake.calls == []
+        assert "more than 14 days" in _text(fake)
+    else:
+        assert fake_switch.read_text() == "2026-11-03\n"
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_already_live_is_success(
+    tmp_path: Path, fake_switch: Path, *, dry_run: bool
+) -> None:
     fake_switch.parent.mkdir(parents=True)
     fake_switch.write_text("2026-10-20\n")
     fake = Fake()
-    assert golive.go_live(_env(tmp_path, fake_switch, fake), force=True) == 1
-    assert "already live" in _text(fake)
+    env = _env(tmp_path, fake_switch, fake)
+    assert golive.go_live(env, force=True, dry_run=dry_run) == 0
+    assert "already live since 2026-10-20" in _text(fake)
     assert fake.calls == []
 
 
@@ -142,6 +163,7 @@ def test_dry_run_writes_nothing(
     assert not fake_switch.exists()
     text = _text(fake)
     assert "would write 2026-10-21" in text
+    assert "systemctl" not in text
     assert "would refuse" in text if broken else "would refuse" not in text
 
 
@@ -158,13 +180,6 @@ def test_write_not_seen_by_earned_time(tmp_path: Path, fake_switch: Path) -> Non
     env = golive.Env(**{**env.__dict__, "execute": lambda argv: 0})
     assert golive.go_live(env) == 1
     assert "earned_time reads" in _text(fake)
-
-
-def test_timer_failure_after_write(tmp_path: Path, fake_switch: Path) -> None:
-    fake = Fake(fail="disable")
-    assert golive.go_live(_env(tmp_path, fake_switch, fake)) == 1
-    assert fake_switch.exists()
-    assert TIMER in _text(fake)
 
 
 def test_undo(tmp_path: Path, fake_switch: Path) -> None:

@@ -13,6 +13,7 @@ _PROC = Path("/proc")
 # /proc/<pid>/stat: "pid (comm) state ppid ...". comm may contain spaces or
 # parentheses, so the fields are split after the LAST ')'.
 _PPID_FIELD = 1
+_START_FIELD = 19  # field 22, starttime: clock ticks after boot (PID-reuse proof)
 
 # A runaway or cyclic parent chain must not spin the watcher.
 _MAX_DEPTH = 64
@@ -51,17 +52,26 @@ def cwd(pid: int) -> str:
         return ""
 
 
-def ppid(pid: int) -> int:
-    """Return *pid*'s parent pid, or ``0`` if unknown."""
+def _stat_field(pid: int, index: int) -> int | None:
     try:
         stat = (_PROC / str(pid) / "stat").read_text(encoding="utf-8")
     except OSError:
-        return 0
+        return None
     fields = stat.rpartition(")")[2].split()
     try:
-        return int(fields[_PPID_FIELD])
+        return int(fields[index])
     except IndexError, ValueError:
-        return 0
+        return None
+
+
+def ppid(pid: int) -> int:
+    """Return *pid*'s parent pid, or ``0`` if unknown."""
+    return _stat_field(pid, _PPID_FIELD) or 0
+
+
+def start_time(pid: int) -> int | None:
+    """Return *pid*'s start time (``stat`` field 22, raw ticks), or ``None``."""
+    return _stat_field(pid, _START_FIELD)
 
 
 def ancestry(pid: int) -> tuple[int, ...]:

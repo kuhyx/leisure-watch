@@ -36,6 +36,10 @@ class Reason:
     key: str  # app:mpv | domain:youtube.com | steam:1091500 | ...
     pid: int | None
     label: str
+    # /proc/<pid>/stat field 22 (raw clock ticks after boot) when the pid was
+    # seen: a killer compares it to the live value so a REUSED pid is spared.
+    # Optional in the document (absent before 0.2.1 and when unreadable).
+    start: int | None = None
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,18 @@ def read_key(key_file: Path) -> bytes | None:
     return key or None
 
 
+def _reason_doc(reason: Reason) -> dict[str, object]:
+    doc: dict[str, object] = {
+        "source": reason.source,
+        "key": reason.key,
+        "pid": reason.pid,
+        "label": reason.label,
+    }
+    if reason.start is not None:
+        doc["start"] = reason.start
+    return doc
+
+
 def to_doc(now: Now) -> dict[str, object]:
     """Serialise *now* without its signature."""
     return {
@@ -88,10 +104,7 @@ def to_doc(now: Now) -> dict[str, object]:
         "seq": now.seq,
         "state": now.state,
         "paused_by": now.paused_by,
-        "reasons": [
-            {"source": r.source, "key": r.key, "pid": r.pid, "label": r.label}
-            for r in now.reasons
-        ],
+        "reasons": [_reason_doc(r) for r in now.reasons],
         "focus": {
             "app": now.focus.app,
             "title": now.focus.title,
@@ -136,11 +149,14 @@ def _reason(raw: object) -> Reason | None:
     if not isinstance(raw, dict):
         return None
     source, key, pid, label = (raw.get(k) for k in ("source", "key", "pid", "label"))
+    start = raw.get("start")
     if not (isinstance(source, str) and isinstance(key, str)):
         return None
     if not isinstance(label, str) or not (pid is None or type(pid) is int):
         return None
-    return Reason(source, key, pid, label)
+    if not (start is None or type(start) is int):
+        return None
+    return Reason(source, key, pid, label, start)
 
 
 def _focus(raw: object) -> Focus | None:

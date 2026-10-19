@@ -8,7 +8,7 @@ enforcer charges one tick however many reasons there are.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -199,6 +199,10 @@ def classify(snap: Snapshot, settings: Settings) -> Now:
     for reason in found:
         if reason is not None:
             reasons.setdefault((reason.source, reason.key), reason)
+    started = [
+        replace(r, start=_proctree.start_time(r.pid)) if r.pid else r
+        for r in reasons.values()
+    ]
     busy = "leisure" if reasons else "free"
     state = "paused" if snap.paused_by else busy
     return Now(
@@ -206,7 +210,7 @@ def classify(snap: Snapshot, settings: Settings) -> Now:
         seq=0,
         state=state,
         paused_by=snap.paused_by,
-        reasons=tuple(reasons.values()),
+        reasons=tuple(started),
         focus=_focus(snap, idle=idle),
         extensions={
             b: (snap.reports[b].received if b in snap.reports else None)

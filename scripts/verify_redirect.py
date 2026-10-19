@@ -44,6 +44,7 @@ def fake_status() -> dict[str, object]:
         "allow": sorted(allow.domains),
         "local_hosts": sorted(allow.local_hosts),
         "deny_ports": sorted(allow.deny_ports),
+        "internal_schemes": sorted(allow.internal_schemes),
         "used_seconds": BUDGET,
         "budget_seconds": BUDGET,
         "day": "2026-10-20",

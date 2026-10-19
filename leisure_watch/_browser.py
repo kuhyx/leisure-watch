@@ -15,6 +15,9 @@ import re
 from typing import Final
 
 EXTENSION_BROWSERS: Final = ("helium", "librewolf")
+# The extension build this package ships (= extension/manifest.base.json, a
+# test pins them together): go-live wants at least this from both browsers.
+EXTENSION_VERSION: Final = "0.2.1"
 OTHER_BROWSERS: Final = frozenset(
     {
         "chromium",
@@ -60,6 +63,15 @@ class ExtReport:
     audible: tuple[str, ...]
     received: float
     incognito: bool = False
+    version: str | None = None  # manifest version; absent before 0.2.1
+
+
+def version_tuple(version: str | None) -> tuple[int, ...] | None:
+    """``"0.10.2"`` as ``(0, 10, 2)``; ``None`` if absent or not dotted digits."""
+    parts = (version or "").split(".")
+    if not all(p.isascii() and p.isdigit() for p in parts):
+        return None
+    return tuple(int(p) for p in parts)
 
 
 def browser_of(name: str) -> str | None:

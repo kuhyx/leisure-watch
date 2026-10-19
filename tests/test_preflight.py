@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from leisure_watch import _preflight, facts, heartbeats, phase2
+from leisure_watch._browser import EXTENSION_VERSION
 from tests.test_lockstate import _claim, _held
 from tests.test_watcher import KEY
 
@@ -43,7 +44,10 @@ def _healthy(src: _preflight.Sources) -> None:
         extensions={"helium": TS - 2, "librewolf": TS - 2},
     )
     facts.write_now(src.now_path, now, src.key_file)
-    src.heartbeat_file.write_text(json.dumps({"helium": TS - 60, "librewolf": TS}))
+    # 0.10.0 > 0.2.1: versions compare as numbers, never as strings.
+    versions = {"helium": EXTENSION_VERSION, "librewolf": "0.10.0"}
+    seen = {"helium": TS - 60, "librewolf": TS, "versions": versions}
+    src.heartbeat_file.write_text(json.dumps(seen))
     state = {"day_key": "2026-10-20", "last_tick_at": TS - 3, **ALL_SHADOW}
     src.playtime_state.write_text(json.dumps(state))
 
@@ -105,6 +109,27 @@ def test_heartbeats_old_or_missing(tmp_path: Path) -> None:
     assert "25.0 h ago" in checks["extension helium"].detail
     assert not checks["extension librewolf"].ok
     assert "never" in checks["extension librewolf"].detail
+
+
+@pytest.mark.parametrize(
+    ("versions", "needle"),
+    [
+        ({}, "version unknown"),
+        ({"helium": "0.2.0", "librewolf": "0.1.2"}, "0.2.0 < " + EXTENSION_VERSION),
+        ({"helium": "0.2.x", "librewolf": ""}, "0.2.x < " + EXTENSION_VERSION),
+    ],
+)
+def test_extension_version_too_old(
+    tmp_path: Path, versions: dict[str, str], needle: str
+) -> None:
+    src = _sources(tmp_path)
+    _healthy(src)
+    seen = {"helium": TS, "librewolf": TS, "versions": versions}
+    src.heartbeat_file.write_text(json.dumps(seen))
+    checks = _by_name(_preflight.preflight(BOTH, src, TS))
+    assert not checks["extension helium"].ok
+    assert not checks["extension librewolf"].ok
+    assert needle in checks["extension helium"].detail
 
 
 @pytest.mark.parametrize(

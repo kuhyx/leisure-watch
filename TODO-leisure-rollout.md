@@ -108,12 +108,17 @@ Written atomically by the user watcher every 5 s (and on change), mode 0644:
  "paused_by": "gatelock:leetcode_guard|i3lock|null",
  "reasons": [{"source": "focus|media|game|failclosed",
               "key": "app:mpv|domain:youtube.com|steam:1091500|...",
-              "pid": 1234, "label": "YouTube — mpv"}],
+              "pid": 1234, "label": "YouTube — mpv",
+              "start": 98765432}],
  "focus": {"app": "Helium", "title": "...", "domain": "youtube.com",
            "idle": false},
  "extensions": {"helium": 1760000000.0, "librewolf": null},
  "sig": "<hex hmac-sha256>"}
 ```
+`start` (additive, 0.2.1): `/proc/<pid>/stat` field 22 (raw clock ticks
+after boot) of `pid` when it was seen; only on entries with a pid, absent
+when unreadable. Readers must accept it missing; a killer compares it with
+the live value and spares a pid whose start differs (PID reuse).
 `sig` = HMAC-SHA256 with key `/etc/workout-locker/hmac.key` over
 `json.dumps(obj_without_sig, sort_keys=True, separators=(",", ":"))`.
 Library API used by the enforcer (stdlib only, importable as root):
@@ -185,10 +190,15 @@ the shadow week keeps exercising it ("would kill/block" lists).
   (persist last-seen per browser in ~/.local/state/leisure-watch/);
   steam-backlog-enforcer active and writing shadow fields; every live gatelock
   claim carries `grab_held`.
-- Writes TOMORROW's date (never today; refuses an argument date <= today) via
-  `sudo install -D -m 0644 -o root -g root`; disables
-  `kuhytrack-budget.timer` (`systemctl --user disable --now`); prints what
-  activates when. `--undo` removes the file (sudo) and re-enables the timer.
+- Preflight also requires both extensions to report a version >= the one
+  this package ships (0.2.1+ reports carry `version`).
+- Writes TOMORROW's date (never today; refuses an argument date <= today or
+  more than 14 days ahead) via `sudo install -D -m 0644 -o root -g root`;
+  prints what activates when. Already live = exit 0. It does NOT touch
+  `kuhytrack-budget.timer`: the watcher disables it
+  (`systemctl --user disable --now`) on the first tick where
+  `leisure_active(gaming_day)` is true (Q13). `--undo` removes the file
+  (sudo) and re-enables the timer.
 
 ### Behaviour on and after the go-live gaming day
 - Budget: earned_time gives 7 h base / 10 h cap automatically.
@@ -207,6 +217,10 @@ the shadow week keeps exercising it ("would kill/block" lists).
 - Extension: when active && spent, redirect every top-level navigation /
   active tab on a non-allowlisted domain to a bundled "leisure spent" page
   (shows used/budget, no bypass button); re-check on every tab update.
+  Non-web tabs the classifier counts (file:, view-source:, blob:, data:,
+  ftp:) are redirected too; browser-internal schemes never. The last
+  /status is persisted: daemon unreachable + last known active = spent.
+  `/status` itself is spent when the enforcer's `last_tick_at` is > 60 s old.
 - daily-limits + i3blocks: the 🎮 block becomes `🛋 Leisure …` (same colours
   logic), the SHADOW block hides itself, shadow alerts + splash stop.
 - Labels: "Leisure" in daily-limits text/GUI and enforcer notifications; JSON

@@ -3,7 +3,9 @@
 Also recomputes as soon as an extension report arrives (rate-limited to one
 publish per second), keeps the daily classification log, and serves the
 live document on ``GET /now`` and the Phase-2 one on ``GET /status``.
-Each tick also persists when each browser's extension last reported.
+Each tick also persists when each browser's extension last reported, and
+the first tick on which Phase 2 enforces retires ``kuhytrack-budget.timer``
+(Q13: it keeps running until then; ``go-live --undo`` re-enables it).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from leisure_watch.extserver import PORT, ExtensionServer, ReportStore
 from leisure_watch.facts import HMAC_KEY_FILE, default_now_path, signed_doc, write_now
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from leisure_watch.facts import Now
@@ -31,6 +33,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_GAP: Final = 1.0  # seconds between event-driven publishes
+_RETRY: Final = 60.0  # seconds between attempts to disable the timer
+_DISABLE: Final = ("systemctl", "--user", "disable", "--now", phase2.KUHYTRACK_TIMER)
+
+
+def run_systemctl(argv: Sequence[str]) -> bool:
+    """Run one systemctl argv (3 s timeout); whether it exited 0."""
+    return _sensors.run(argv) is not None
+
+
+systemctl: Callable[[Sequence[str]], bool] = run_systemctl
 
 
 @dataclass(frozen=True)
@@ -107,6 +119,8 @@ class Watcher:
         self._lock = threading.Lock()
         self.seq = 0
         self._last_ts: float | None = None
+        self._timer_retired = False
+        self._timer_retry_at = 0.0
 
     def _mtime(self) -> float | None:
         path = self.cfg.allowlist_file
@@ -152,7 +166,25 @@ class Watcher:
             self._daylog.add(now, dt)
             self._daylog.flush()
             self._heartbeats.update(self.store.snapshot())
+            self._retire_timer(now.ts)
             return now
+
+    def _retire_timer(self, ts: float) -> None:
+        """Disable the kuhytrack timer once per live stretch (after publish)."""
+        if not phase2.active(ts, self.cfg.switch_path):
+            self._timer_retired, self._timer_retry_at = False, 0.0
+            return
+        if self._timer_retired or ts < self._timer_retry_at:
+            return
+        if systemctl(_DISABLE):
+            self._timer_retired = True
+            logger.info("leisure budget live: disabled %s", phase2.KUHYTRACK_TIMER)
+            return
+        if self._timer_retry_at == 0.0:
+            logger.warning(
+                "could not disable %s; retrying every minute", phase2.KUHYTRACK_TIMER
+            )
+        self._timer_retry_at = ts + _RETRY
 
     def wake(self) -> None:
         """Ask the loop to publish early (an extension report arrived)."""
