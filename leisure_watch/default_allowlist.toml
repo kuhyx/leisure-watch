@@ -1,0 +1,105 @@
+# leisure-watch default allowlist (agreed with kuhy 2026-10-19, Q5/Q16/Q18/Q20/Q21).
+#
+# Anything NOT matched here counts as leisure while focused (or playing).
+# A user file at ~/.config/leisure-watch/allowlist.toml EXTENDS these lists
+# (same tables and keys); it cannot remove a default entry.
+#
+# Work domains (aiclearing*) are deliberately absent: kuhy said no.
+
+[domains]
+# Host matches when host == entry or host ends with "." + entry.
+# An entry with ":port" matches that exact host:port only.
+allow = [
+    "mail.google.com",
+    "calendar.google.com",
+    "mail.proton.me",
+    "calendar.proton.me",
+    "account.proton.me",
+    "leetcode.com",
+    "claude.ai",
+    "platform.claude.com",
+    "docs.anthropic.com",
+    "github.com",
+    "githubusercontent.com",
+    "gitlab.com",
+    "stackoverflow.com",
+    "stackexchange.com",
+    "developer.mozilla.org",
+    "docs.python.org",
+    "pypi.org",
+    "pub.dev",
+    "flutter.dev",
+    "developer.android.com",
+    "docs.godotengine.org",
+    "archlinux.org",
+    "figma.com",
+    "docs.google.com",
+    "drive.google.com",
+    "pw.edu.pl",
+    "100.109.64.41:5600", # kuhytrack dashboard
+]
+
+[localhost]
+# Any port on these hosts, EXCEPT deny_ports.
+hosts = ["localhost", "127.0.0.1"]
+deny_ports = [8765] # wsg-grabber dashboard (wsg_grabber/dashboard.py DEFAULT_PORT)
+
+[internal]
+# Browser-internal pages (new tab, settings, extension pages). An empty URL
+# (a tab that has not committed a navigation yet) counts as internal too.
+schemes = [
+    "about",
+    "chrome",
+    "chrome-extension",
+    "chrome-search",
+    "chrome-untrusted",
+    "moz-extension",
+]
+
+[apps]
+# WM_CLASS instance or class, case-insensitive, shell-style globs.
+# Browsers (Helium, LibreWolf) are never matched here: domain rules apply.
+# Godot is listed per the spec, but the Q22 rule (editor / ~/src only) is
+# checked first, so exported or itch builds still count.
+classes = [
+    "terminator",
+    "pcmanfm",
+    "keepassxc",
+    "pavucontrol-qt",
+    "soffice",
+    "libreoffice*",
+    "gcr-prompter",
+    "xdg-desktop-portal-gtk",
+    "xfce4-notifyd",
+    "screengrab",
+    "simplescreenrecorder",
+    "todo",
+    "tutor",
+    "daily-limits",
+    "issue-dashboard",
+    "steam-backlog-enforcer",
+    "book-guard",
+    "diet-guard",
+    "diet-guard-app",
+    "krita",
+    "godot*",
+    "blender",
+    "kdenlive",
+    "code",
+    "vscodium",
+    "codium",
+    "xephyr",
+]
+# Window title prefixes, case-insensitive: Tk windows (lockers and guards)
+# share the generic "Tk" class, so the title is the only usable name.
+titles = [
+    "Workout Locker",
+    "Workout Status",
+    "LeetCode Status",
+    "LeetCode Guard",
+    "MealGate",
+    "Diet Gate",
+    "Book Guard",
+    "Extreme Heat",
+    "Daily limits",
+]
