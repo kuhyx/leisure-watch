@@ -148,6 +148,19 @@ symlinked into ~/.config/i3blocks).
 4. Root unit changes passed in vmbox first ("passed in vmbox, not verified on
    host" until the host run).
 
+## Status (2026-10-19)
+
+Phase 1 live on host: earned_time 0.14.0, gatelock 0.11.0, leisure-watch
+0.1.2 (watcher unit + extension in Helium wrapper and LibreWolf profile),
+enforcer shadow billing (restarted, enforced fields unchanged), daily-limits
+`leisure_shadow` + i3blocks block + alerts + splash. Shadow week runs
+2026-10-20 → 2026-10-27 (10-19 is contaminated: old-code locker claims paused billing, Helium failclosed until the extension loaded); review with `python -m leisure_watch report --day D`.
+Known limits: private windows count until kuhy grants "Allow in Incognito"
+(Helium) / "Run in Private Windows" (LibreWolf); HMAC key is user-readable
+(0644 by design) so a determined forger can sign a "free" now.json; extension
+endpoint trusts any local process sending an extension Origin; root imports
+leisure_watch from the user site-packages (existing pattern).
+
 ## Phase 2 (separate session, after kuhy OKs the shadow week)
 Set `LEISURE_FROM` = next day; extension blocking + root kill of
 non-allowlisted apps at 0; "Leisure" labels; remove `kuhytrack-budget.timer`;
