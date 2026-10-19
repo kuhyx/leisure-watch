@@ -115,6 +115,16 @@ repos:
           (pyproject\.toml|requirements.*\.txt|package\.json
           |\.python-version|\.github/workflows/.*\.ya?ml)$
 
+      # The full suite at the 100% branch bar (manual stage: the push gate
+      # runs it before stamping the tree; CI runs it on every push).
+      - id: pytest-coverage
+        name: pytest, 100% branch coverage
+        entry: python3 -m pytest --cov=leisure_watch --cov-branch --cov-fail-under=100
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]
+
       # The only pre-push hook: finish_auto.sh stamps HEAD after its gate.
       - id: gate-stamp
         name: pushed tree passed the local gate (stamp check)

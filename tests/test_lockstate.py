@@ -140,3 +140,19 @@ class TestClaimsDir:
 
 def test_claim_vanishing_before_the_lock(tmp_path: Path) -> None:
     assert not lockstate._owner_alive(tmp_path / "gone.json")
+
+
+def test_concurrent_reader_does_not_fake_a_live_owner(tmp_path: Path) -> None:
+    """Root enforcer and user watcher probe the same dead claim at once."""
+    path = _claim(tmp_path, "a", grab_held=True)
+    with path.open("r", encoding="utf-8") as other_reader:
+        fcntl.flock(other_reader.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        assert lockstate.held_grab_apps(tmp_path) == ()
+
+
+def test_probe_never_modifies_the_claims_dir(tmp_path: Path) -> None:
+    path = _claim(tmp_path, "a", grab_held=True)
+    before = (sorted(p.name for p in tmp_path.iterdir()), path.stat().st_mtime_ns)
+    lockstate.held_grab_apps(tmp_path)
+    after = (sorted(p.name for p in tmp_path.iterdir()), path.stat().st_mtime_ns)
+    assert before == after

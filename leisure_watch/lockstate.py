@@ -5,11 +5,12 @@ runs. Leetcode study mode releases the grab (``grab_held: false``), so it
 does not pause. Claims written before C2 have no ``grab_held``; for those it
 is ``grab != "none"``.
 
-Reads claims the way gatelock's ``read_claim_if_held`` does -- the claim's
-owner holds an exclusive ``flock`` for its whole life, so failing to take the
-lock is the proof of life -- but never reaps a dead claim (that is
-gatelock's job) and never locks an empty file (an owner between ``open`` and
-``flock`` would otherwise lose its claim to us). Stdlib only, root-safe.
+Strictly read-only (gatelock 0.11's ``held_grabs`` reaps dead claims, so it
+is NOT used): the claim's owner holds an exclusive ``flock`` for its whole
+life, so failing to take a shared lock is the proof of life. Never creates,
+modifies or unlinks anything in the claims dir, and never locks an empty
+file (an owner between ``open`` and ``flock`` would otherwise lose its claim
+to us). Stdlib only, root-safe with an explicit claims dir.
 """
 
 from __future__ import annotations
@@ -57,11 +58,16 @@ def _grabbing(text: str) -> tuple[str, int] | None:
 
 
 def _owner_alive(path: Path) -> bool:
-    """Whether a live process still holds *path*'s flock."""
+    """Whether a live process still holds *path*'s exclusive flock.
+
+    Probes with a SHARED non-blocking lock: it conflicts only with the
+    owner's exclusive one, so two readers (root enforcer + user watcher)
+    probing the same dead claim at once both see it as dead.
+    """
     try:
         with path.open("r", encoding="utf-8") as handle:
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
             except OSError as exc:
                 return exc.errno in _CONTENDED
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
