@@ -8,4 +8,4 @@ stdlib-only; earned_time is imported only by the user-side Phase-2 modules
 (:mod:`leisure_watch.phase2`, :mod:`leisure_watch.golive`, the watcher).
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
