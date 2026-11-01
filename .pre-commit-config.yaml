@@ -53,6 +53,15 @@ repos:
         entry: bash scripts/check_file_length.sh
         language: system
         types: [text]
+      # The global `exclude` hides kuhytrack/ from the hook above, so the cap
+      # there needs its own whole-tree run (always_run bypasses the exclude).
+      # CI gets it through `pre-commit run --all-files`.
+      - id: file-length-kuhytrack
+        name: Files under kuhytrack/ must be at most 250 lines
+        entry: bash scripts/check_file_length.sh --all
+        language: system
+        pass_filenames: false
+        always_run: true
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.2

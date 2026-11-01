@@ -6,6 +6,14 @@
 repos:
   - repo: local
     hooks:
+      # 250-line cap on code and prose, checked on the files in the commit. Shared
+      # gate in ~/src/utils owns the cap and the exemptions (generated/markup/data).
+      - id: file-length
+        name: 250-line cap (code and prose)
+        entry: scripts/check_file_length.sh
+        language: system
+        pass_filenames: true
+
       # Four markdown namespaces (README / CLAUDE* / DOCS* / TODO*), plus the
       # rule that a TODO carries "REMOVE ME AFTER FINISH" and nothing else may.
       # Shared gate in ~/src/utils owns the namespaces and the exemption list, so

@@ -9,7 +9,7 @@ final; do not re-ask). This repo owns contract C3 (`now.json`).
   yourself: ask `earned_time.leisure_active(day, path=...)`. Tests in
   `tests/`, 100% branch coverage; conftest redirects the switch file.
   `kuhytrack/` is a subtree import with its own gates: root gates exclude
-  it; do not restructure it.
+  it, except the 250-line cap (`file-length-kuhytrack` hook); do not restructure it.
 - `leisure_watch.procscan` must stay importable 1:1 by
   steam-backlog-enforcer (same public names as its originals).
 - Every action < 60 s: use `scripts/test_changed.sh` for the inner loop.

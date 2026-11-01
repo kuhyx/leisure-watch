@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 import json
+import time
 from typing import TYPE_CHECKING
 
 from leisure_watch.daylog import DayLog, gaming_day, render_report
@@ -12,8 +13,13 @@ from leisure_watch.facts import Focus, Now, Reason
 if TYPE_CHECKING:
     from pathlib import Path
 
-LOCAL = datetime.now().astimezone().tzinfo
-NOON = datetime(2026, 10, 19, 12, 0, tzinfo=LOCAL).timestamp()
+
+def _local_ts(hour: int, minute: int = 0) -> float:
+    """Epoch of 2026-10-19 hh:mm local time, DST of that date (not of today)."""
+    return time.mktime((2026, 10, 19, hour, minute, 0, 0, 0, -1))
+
+
+NOON = _local_ts(12)
 YT = Reason("focus", "domain:youtube.com", 1, "YouTube")
 MPV = Reason("media", "app:mpv", 2, "x — mpv")
 
@@ -23,12 +29,8 @@ def _now(ts: float, state: str, reasons: tuple[Reason, ...], app: str) -> Now:
 
 
 def test_gaming_day_rolls_at_six() -> None:
-    assert gaming_day(datetime(2026, 10, 19, 5, 59, tzinfo=LOCAL).timestamp()) == date(
-        2026, 10, 18
-    )
-    assert gaming_day(datetime(2026, 10, 19, 6, 0, tzinfo=LOCAL).timestamp()) == date(
-        2026, 10, 19
-    )
+    assert gaming_day(_local_ts(5, 59)) == date(2026, 10, 18)
+    assert gaming_day(_local_ts(6)) == date(2026, 10, 19)
 
 
 def test_aggregates_per_state_source_key(tmp_path: Path) -> None:

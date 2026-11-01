@@ -58,7 +58,7 @@ Check with `journalctl --user -u kuhytrack-watcher`: the startup line must read
 
 | path | what |
 |---|---|
-| `server/kt_server.py` | the whole server: buckets, events, heartbeat merge, habits, sessions, summaries |
+| `server/kt_server.py` | the server entry point; `ktstore.py` (storage, heartbeat merge), `ktreport.py` (summaries, streaks), `ktroutes_*.py` (HTTP routes) sit beside it |
 | `linux/kt-watcher-linux.py` | window + AFK. Hyprland → sway → X11 → KWin; 5 idle sources; offline spool |
 | `android/kt-watcher-android.sh` | Termux + Magisk root. Live foreground app + screen state |
 | `android/kt-bridge-awandroid.sh` | no root: pulls aw-android's loopback API, pushes here, incrementally |
@@ -66,7 +66,7 @@ Check with `journalctl --user -u kuhytrack-watcher`: the startup line must read
 | `cli/ktconf.py` | env → `~/.config/kuhytrack/env` → default, shared by all four client tools |
 | `web/dashboard.html` | one file, no CDN, no webfonts; 24h tape per device |
 | `hooks/kt-budget.py` | daily per-app budgets → runs a command once when blown |
-| `importers/kt-import.py` | `aw` (export file or live server), `awdb` (raw aw-server sqlite), `wakapi`; all dedupe |
+| `importers/kt-import.py` (+ `ktimp_*.py`) | `aw` (export file or live server), `awdb` (raw aw-server sqlite), `wakapi`; all dedupe |
 | `tools/kt-seed.py` | plausible fake data for a 2-device day |
 | `tests/test_kt.py` | 19 tests, stdlib unittest |
 
