@@ -42,4 +42,4 @@ def test_root_imported_modules_stay_stdlib_only() -> None:
 def test_earned_time_is_exact_pinned_to_a_tag() -> None:
     (dep,) = PYPROJECT["project"]["dependencies"]
     assert dep.startswith("earned-time @ git+https://github.com/kuhyx/utils@")
-    assert "@earned-time-v0.20.0#subdirectory=earned_time" in dep
+    assert "@earned-time-v0.21.0#subdirectory=earned_time" in dep
