@@ -1,9 +1,6 @@
-# TODO — leisure budget rollout (gaming → all non-productive time)
+# Leisure budget rollout - design record
 
-> REMOVE ME AFTER FINISH — delete this file once Phase 2 has landed.
-
-Agreed with kuhy 2026-10-19 (grilling Q1–Q23, plan confirmed). This file is the
-shared spec + cross-repo contracts for every subagent/session working on it.
+Agreed with kuhy 2026-10-19 (grilling Q1-Q23). Moved verbatim from TODO-leisure-rollout.md; the remaining work lives in the todo app.
 
 ## Goal
 
@@ -141,17 +138,6 @@ Adds `"leisure_shadow": {"day", "budget_minutes", "used_minutes",
 i3blocks `leisure_shadow.sh` renders it (in testsAndMisc linux_configuration,
 symlinked into ~/.config/i3blocks).
 
-## Phase 1 done
-
-1. `python -m leisure_watch status --json` gives the right state live for:
-   Helium on youtube → leisure; Helium on github → free; Terminator → free;
-   unfocused mpv playing → leisure; gatelock grab held → paused; extension
-   disabled + Helium focused → leisure (failclosed).
-2. Enforced `resolve_budget` before/after identical on real ledgers.
-3. i3bar shows the shadow block; would-be-0 splash + notifications fire
-   (verified with a forced low shadow budget, not by waiting).
-4. Root unit changes passed in vmbox first ("passed in vmbox, not verified on
-   host" until the host run).
 
 ## Status (2026-10-19)
 
@@ -165,6 +151,7 @@ Known limits: private windows count until kuhy grants "Allow in Incognito"
 (0644 by design) so a determined forger can sign a "free" now.json; extension
 endpoint trusts any local process sending an extension Origin; root imports
 leisure_watch from the user site-packages (existing pattern).
+
 
 ## Phase 2 — built dormant now, enabled by ONE command (decided 2026-10-19)
 
@@ -227,7 +214,3 @@ the shadow week keeps exercising it ("would kill/block" lists).
   keys / identifiers stay `gaming_*`.
 
 ### Q7 done separately: archive GitHub kuhyx/kuhytrack with a README pointer.
-
-## Phase 2 status (2026-10-19)
-
-Built dormant: earned_time 0.16.0, leisure-watch 0.2.1, enforcer d2c4ea7, daily-limits ed274f2, i3blocks 66321e55. Enable with `leisure-watch go-live` (preflight needs Helium + LibreWolf started once on extension >= 0.2.1); undo with `leisure-watch go-live --undo`. Two finish-line reviews ran; all fixes landed.
