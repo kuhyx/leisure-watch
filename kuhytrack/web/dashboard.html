@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<title>kuhytrack</title>
+<title>⏱</title>
 <!--
   Design note: this is a chart recorder, not a SaaS dashboard. Engineering-paper
   ground, ink rules, one oxide pen line at "now". Two device colours are the whole
@@ -45,6 +45,12 @@
   button:hover{border-color:var(--ink);color:var(--ink)}
   button[aria-pressed=true]{background:var(--ink);color:var(--paper-2);border-color:var(--ink)}
   button:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+  /* token needed: the key button itself carries the signal (pen colour + pulse) */
+  button.need{border-color:var(--pen);color:var(--pen)}
+  #tokin{font-family:var(--mono);font-size:11px;padding:5px 8px;border:1px solid var(--pen);
+    background:var(--paper-2);color:var(--ink);width:14em}
+  #tokin:focus-visible{outline:2px solid var(--pen);outline-offset:2px}
+  .glyph{vertical-align:-2px}
   h2{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
      color:var(--ink-2);margin:26px 0 10px;font-weight:600}
 
@@ -100,11 +106,12 @@
     <button data-days="7" aria-label="last 7 days"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="16" text-anchor="middle" font-size="7" fill="currentColor" stroke="none">7</text></svg></button>
     <button data-days="30" aria-label="last 30 days"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="16" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">30</text></svg></button>
     <button id="tok" aria-label="set token"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-9 9"/><path d="M15.5 6.5l3 3a3.5 3.5 0 0 1-5 5l-3-3"/><circle cx="10" cy="10" r="3"/></svg></button>
+    <input id="tokin" type="password" autocomplete="off" aria-label="KT_TOKEN" hidden>
   </nav>
   <div id="out"></div>
   <footer>
     <span id="devs"></span>
-    <span>refreshes every 60s · <span id="clock"></span></span>
+    <span aria-label="refreshes every 60s"><svg class="glyph" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></svg> <span id="clock"></span></span>
   </footer>
 </div>
 <script>
@@ -116,7 +123,7 @@ function tok(){return localStorage.getItem('kt_token')||''}
 async function api(p){
   const h=tok()?{Authorization:'Bearer '+tok()}:{};
   const r=await fetch(p,{headers:h});
-  if(r.status===401){throw new Error('401 — set token')}
+  if(r.status===401){throw new Error('401')}
   if(!r.ok) throw new Error(r.status+' '+await r.text());
   return r.json();
 }
@@ -168,20 +175,22 @@ async function render(){
   try{
     const [sum,tl]=await Promise.all([api(`/api/0/kt/summary?${qs}&top=12`),
                                       api(`/api/0/kt/timeline?${qs}&limit=6000`)]);
+    document.getElementById('tok').classList.remove('need');
     const union=sum.union_seconds??sum.total_seconds;
     const t=document.getElementById('total');
     t.textContent=hms(union);
-    t.title='wall-clock time any device was active';
-    document.getElementById('range').textContent=(isDay
-      ? start.toLocaleDateString('en-CA') : `${state.days} days`)
+    // Dates and durations only; "device-hours" is a stacked-screens glyph.
+    const day=d=>d.toLocaleDateString('en-CA');
+    document.getElementById('range').innerHTML=(isDay
+      ? day(start) : `${day(start)} – ${day(new Date(end-1))}`)
       + (Math.round(union)!==Math.round(sum.total_seconds)
-         ? ` · ${hms(sum.total_seconds)}h` : '');
+         ? ` · <svg class="glyph" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-label="device-hours"><rect x="2" y="7" width="15" height="11"/><polyline points="6 3 21 3 21 14"/></svg> ${hms(sum.total_seconds)}` : '');
     const devs=sum.devices;
     document.getElementById('devs').innerHTML=devs.length
       ? `<span class="legend">`+devs.map(d=>`<span><b style="background:${colorOf(devs,d)}"></b>${esc(d)}</span>`).join('')+`</span>`:'';
     if(!devs.length){
-      out.innerHTML=`<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ink-2)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-<code>KT_URL=http://$(hostname -I | awk '{print $1}'):5600 python3 kt-watcher-linux.py</code></div>`;
+      // Empty window: idle clock only (watcher setup: README.md, KT_URL in cli/ktconf.py).
+      out.innerHTML=`<div class="empty" role="img" aria-label="no events in this window"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ink-2)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>`;
       return;
     }
     const byDev={};tl.forEach(e=>(byDev[e.device]=byDev[e.device]||[]).push(e));
@@ -198,15 +207,29 @@ async function render(){
           n=>`hsl(${hashHue(n)} 18% 42%)`):'')
       + `</div></div>`;
   }catch(e){
-    out.innerHTML=`<div class="empty">Request failed: ${esc(e.message)}
-${e.message.startsWith('401')?'Press “set token” and paste the value of KT_TOKEN from the server.':'Check that kt_server.py is running and reachable.'}</div>`;
+    // Error = pen-coloured glyph, no words: a key (and the key button lights up)
+    // for 401, a broken link for anything else. Old wording is spoken-only.
+    const auth=e.message.startsWith('401');
+    document.getElementById('tok').classList.toggle('need',auth);
+    const g=auth
+      ? '<path d="M21 2l-9 9"/><path d="M15.5 6.5l3 3a3.5 3.5 0 0 1-5 5l-3-3"/><circle cx="10" cy="10" r="3"/>'
+      : '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="4" y1="20" x2="20" y2="4"/>';
+    out.innerHTML=`<div class="empty" role="img" aria-label="${auth
+      ? 'set token: paste KT_TOKEN from the server' : 'request failed: is kt_server.py running?'}"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--pen)" stroke-width="1.5">${g}</svg></div>`;
   }
 }
 document.getElementById('nav').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
-  if(b.id==='tok'){const v=prompt('KT_TOKEN',tok());if(v!==null)localStorage.setItem('kt_token',v.trim());return render()}
+  // Key button opens an inline password field (no prompt() dialog text); Enter saves.
+  if(b.id==='tok'){const i=document.getElementById('tokin');i.hidden=!i.hidden;
+    if(!i.hidden){i.value=tok();i.focus()}return}
   [...document.querySelectorAll('#nav button')].forEach(x=>x.setAttribute('aria-pressed',x===b));
   state={off:+(b.dataset.off||0),days:b.dataset.days?+b.dataset.days:null};render();
+});
+document.getElementById('tokin').addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.target.hidden=true;return}
+  if(e.key!=='Enter')return;
+  localStorage.setItem('kt_token',e.target.value.trim());e.target.hidden=true;render();
 });
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
 setInterval(render,60000);render();

@@ -96,7 +96,7 @@ class HttpApi(unittest.TestCase):
         status, ctype, body = self.raw("/", token=None)
         self.assertEqual(status, 200)
         self.assertIn("text/html", ctype)
-        self.assertIn(b"set token", body)
+        self.assertIn(b'id="tok"', body)  # the token button, not its wording
 
     def test_api_still_gated_without_token(self):
         """Serving the shell must not have opened up the data behind it."""

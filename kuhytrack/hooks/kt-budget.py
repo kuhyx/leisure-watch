@@ -54,7 +54,7 @@ CONF = Path(
 # default POSTed to 127.0.0.1:8765/lock, an endpoint that never existed (8765 is
 # the phone workout app's port), so the budget could never lock anything.
 LOCK_ACTION = (
-    "notify-send -u critical 'kuhytrack' '{app}: {used}m of {budget}m used'; "
+    "notify-send -u critical -i appointment-missed '⏳' '{app} {used}/{budget}'; "
     'loginctl lock-session "$(loginctl show-user "$(id -un)" -p Display --value)"'
 )
 
@@ -78,7 +78,7 @@ DEFAULTS = {
             "device": socket.gethostname(),
             "match": ["firefox", "chromium", "chrome", "thorium"],
             "minutes": 120,
-            "action": "notify-send 'kuhytrack' '{app}: {used}m of {budget}m used'",
+            "action": "notify-send -i appointment-missed '⏳' '{app} {used}/{budget}'",
         },
     ],
 }
