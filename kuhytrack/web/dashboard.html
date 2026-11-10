@@ -90,17 +90,16 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>kuhytrack</h1>
-    <span class="sub" id="range">loading</span>
+    <span class="sub" id="range">· ·</span>
     <span class="total" id="total">—</span>
   </header>
   <nav id="nav">
-    <button data-off="0" aria-pressed="true">today</button>
-    <button data-off="-1">yesterday</button>
-    <button data-off="-2">2 days ago</button>
-    <button data-days="7">last 7 days</button>
-    <button data-days="30">last 30 days</button>
-    <button id="tok">set token</button>
+    <button data-off="0" aria-pressed="true" aria-label="today"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></button>
+    <button data-off="-1" aria-label="yesterday"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="15 9 11 12 15 15"/></svg></button>
+    <button data-off="-2" aria-label="2 days ago"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="16" text-anchor="middle" font-size="8" fill="currentColor" stroke="none">2</text></svg></button>
+    <button data-days="7" aria-label="last 7 days"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="16" text-anchor="middle" font-size="7" fill="currentColor" stroke="none">7</text></svg></button>
+    <button data-days="30" aria-label="last 30 days"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="16" text-anchor="middle" font-size="6" fill="currentColor" stroke="none">30</text></svg></button>
+    <button id="tok" aria-label="set token"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-9 9"/><path d="M15.5 6.5l3 3a3.5 3.5 0 0 1-5 5l-3-3"/><circle cx="10" cy="10" r="3"/></svg></button>
   </nav>
   <div id="out"></div>
   <footer>
@@ -156,7 +155,7 @@ function tape(dev,evs,start,end,devs){
 
 function list(title,items,total,color){
   const mx=Math.max(...items.map(i=>i[1]),1);
-  return `<h2>${title}</h2>`+items.map(([n,v])=>`<div class="row">
+  return items.map(([n,v])=>`<div class="row">
       <span class="n">${esc(n)}</span><span class="v">${hms(v)}</span>
       <span class="meter"><i style="width:${v/mx*100}%;background:${color(n)}"></i></span>
     </div>`).join('');
@@ -174,15 +173,14 @@ async function render(){
     t.textContent=hms(union);
     t.title='wall-clock time any device was active';
     document.getElementById('range').textContent=(isDay
-      ? start.toDateString().toLowerCase() : `${state.days} days to now`)
+      ? start.toLocaleDateString('en-CA') : `${state.days} days`)
       + (Math.round(union)!==Math.round(sum.total_seconds)
-         ? ` · ${hms(sum.total_seconds)} device-hours` : '');
+         ? ` · ${hms(sum.total_seconds)}h` : '');
     const devs=sum.devices;
     document.getElementById('devs').innerHTML=devs.length
       ? `<span class="legend">`+devs.map(d=>`<span><b style="background:${colorOf(devs,d)}"></b>${esc(d)}</span>`).join('')+`</span>`:'';
     if(!devs.length){
-      out.innerHTML=`<div class="empty">No events in this window.
-Point a watcher at this server:
+      out.innerHTML=`<div class="empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--ink-2)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 <code>KT_URL=http://$(hostname -I | awk '{print $1}'):5600 python3 kt-watcher-linux.py</code></div>`;
       return;
     }
@@ -190,12 +188,12 @@ Point a watcher at this server:
     out.innerHTML =
       (isDay?devs.map(d=>tape(d,byDev[d]||[],start,end,devs)).join(''):'')
       + `<div class="cols"><div>`
-      + list('what you used',Object.entries(sum.top_apps),sum.total_seconds,
+      + list('',Object.entries(sum.top_apps),sum.total_seconds,
              n=>{const d=devs.find(x=>(sum.per_device[x]?.apps||{})[n]);return colorOf(devs,d||devs[0])})
       + `</div><div>`
-      + list('where you were',devs.map(d=>[d,sum.per_device[d]?.seconds||0]),
+      + list('',devs.map(d=>[d,sum.per_device[d]?.seconds||0]),
              sum.total_seconds,n=>colorOf(devs,n))
-      + (Object.keys(sum.per_type||{}).length? list('signal types',
+      + (Object.keys(sum.per_type||{}).length? list('',
           Object.entries(sum.per_type).sort((a,b)=>b[1]-a[1]),0,
           n=>`hsl(${hashHue(n)} 18% 42%)`):'')
       + `</div></div>`;

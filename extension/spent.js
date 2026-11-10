@@ -14,4 +14,5 @@ function hoursMinutes(raw) {
 const params = new URLSearchParams(location.search);
 document.getElementById("used").textContent = hoursMinutes(params.get("used"));
 document.getElementById("budget").textContent = hoursMinutes(params.get("budget"));
-document.getElementById("site").textContent = params.get("site") || "this site";
+const siteEl = document.getElementById("site");
+if (params.get("site")) { siteEl.textContent = params.get("site"); }
