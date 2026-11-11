@@ -27,3 +27,4 @@ Dev tools are exact-pinned in `pyproject.toml` `[dev]`; `python -m venv .venv &&
 - lint: `python -m ruff check . && python -m ruff format --check . && python -m mypy leisure_watch tests`
 - coverage: `python -m pytest -q --cov=leisure_watch --cov-branch --cov-report=xml --cov-fail-under=100`
 - coverage-gaps: `coverage-gaps coverage.xml`
+- deploy: `scripts/deploy.sh` (pulls ~/src/leisure-watch, runs its install.sh, health-checks the unit + now.json; `--check-only` re-runs the checks)
