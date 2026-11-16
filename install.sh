@@ -12,6 +12,9 @@
 #      by kuhy); LibreWolf: profile install (all inside $HOME);
 #   5. the systemd --user unit, enabled and (re)started.
 # Never restarts a browser.
+#
+# install.sh --uninstall stands the whole thing down instead (the budget is
+# gone): scripts/uninstall.sh lists what it undoes and what it keeps.
 # ============================================================================
 
 set -euo pipefail
@@ -41,7 +44,7 @@ ensure_tools() {
     exit 1
 }
 
-readonly EARNED_TIME="earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.21.0#subdirectory=earned_time"
+readonly EARNED_TIME="earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.22.0#subdirectory=earned_time"
 
 ensure_earned_time() {
     # --no-deps below never pulls earned-time; install the pin only when the
@@ -75,6 +78,9 @@ install_unit() {
 }
 
 main() {
+    if [[ ${1:-} == --uninstall ]]; then
+        exec "$REPO/scripts/uninstall.sh"
+    fi
     [[ $EUID -ne 0 ]] || { log "run as the desktop user, not root"; exit 1; }
     ensure_tools
     install_package

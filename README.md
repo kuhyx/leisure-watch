@@ -1,5 +1,14 @@
 # leisure-watch
 
+**Stood down 2026-11-16.** The gaming/leisure budget is gone (earned_time
+0.22.0: `leisure_active()` is always false, `go-live` refuses), so nothing
+consumes these facts. `./install.sh --uninstall` disables the unit and removes
+the browser extension from Helium (conf + root wrapper) and LibreWolf and the
+root switch file; it keeps the pip package (the enforcer imports
+`leisure_watch.procscan`), the day logs and the LibreWolf prefs. Do not run
+`install.sh` or `scripts/deploy.sh` without `--uninstall` unless the watcher
+is wanted again.
+
 Publishes signed facts about whether the desktop is being used for
 **leisure** (games, video, browsing, messaging), is **free** (productive), or
 is **paused** (a locker holds its grab, or i3lock runs). Phase 1 of the

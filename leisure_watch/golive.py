@@ -95,6 +95,17 @@ def _write_switch(env: Env, day: date) -> bool:
         return env.execute([*_INSTALL, str(staged), str(env.switch)]) == 0
 
 
+def _date_problem(today: date, target: date) -> str | None:
+    """Why *target* cannot be a go-live day, or ``None`` if it can."""
+    if not earned_time.gaming_enforced(today):
+        return "the gaming budget is gone (earned_time 0.22.0), so is the leisure one"
+    if target <= today:
+        return f"{target} is not after today's gaming day {today}"
+    if target > today + timedelta(days=MAX_AHEAD_DAYS):
+        return f"{target} is more than {MAX_AHEAD_DAYS} days ahead"
+    return None
+
+
 def go_live(
     env: Env, *, force: bool = False, dry_run: bool = False, day: date | None = None
 ) -> int:
@@ -102,11 +113,8 @@ def go_live(
     ts = env.clock()
     today = gaming_day(ts)
     target = day or today + timedelta(days=1)
-    if target <= today:
-        env.out(f"refusing: {target} is not after today's gaming day {today}")
-        return 2
-    if target > today + timedelta(days=MAX_AHEAD_DAYS):
-        env.out(f"refusing: {target} is more than {MAX_AHEAD_DAYS} days ahead")
+    if problem := _date_problem(today, target):
+        env.out(f"refusing: {problem}")
         return 2
     if earned_time.leisure_active(today, path=env.switch):
         live = earned_time.leisure_from(path=env.switch)

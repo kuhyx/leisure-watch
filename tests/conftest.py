@@ -54,6 +54,22 @@ def fake_switch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.fixture(autouse=True)
+def legacy_gaming_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 2 is tested as it was while the gaming budget existed.
+
+    earned_time 0.22.0 ends the budget on ``GAMING_UNLIMITED_FROM`` (2026-11-16),
+    after which ``leisure_active`` is always False. The fixture pushes that date
+    out so the dormant mechanics stay covered; ``test_budget_removed`` restores
+    the real date to prove the switch can no longer turn anything on.
+    """
+    from datetime import date
+
+    from earned_time import _gaming
+
+    monkeypatch.setattr(_gaming, "GAMING_UNLIMITED_FROM", date(2999, 1, 1))
+
+
+@pytest.fixture(autouse=True)
 def fake_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point the enforcer state and the heartbeat file at ``tmp_path``."""
     state = tmp_path / "playtime_state.json"

@@ -11,8 +11,12 @@
 # these prefs. Takes effect the next time LibreWolf starts -- it never
 # restarts a browser.
 #
+# --remove (stand-down) deletes the XPI and nothing else: the two prefs stay,
+# because the profile's other add-ons (LeechBlock, uBlock) are unsigned
+# profile-scope XPIs that need them. Needs no <xpi> argument.
+#
 # Usage: install_librewolf_extension.sh <path/to/leisure-watch@kuhy.dev.xpi>
-#        [--profile DIR]   (DIR: for testing)
+#        [--profile DIR] [--remove]   (DIR: for testing)
 # ============================================================================
 
 set -euo pipefail
@@ -22,6 +26,7 @@ readonly ROOT="$HOME/.librewolf"
 readonly MARK="// leisure-watch extension (scripts/install_librewolf_extension.sh)"
 PROFILE=""
 XPI=""
+REMOVE=0
 
 log() { printf 'leisure-watch librewolf: %s\n' "$1" >&2; }
 
@@ -77,15 +82,21 @@ main() {
     while [[ $# -gt 0 ]]; do
         case $1 in
             --profile) PROFILE="$2"; shift 2 ;;
+            --remove) REMOVE=1; shift ;;
             -*) log "unknown option: $1"; exit 1 ;;
             *) XPI="$1"; shift ;;
         esac
     done
-    [[ -f "$XPI" ]] || { log "usage: $(basename "$0") <xpi> [--profile DIR]"; exit 1; }
+    ((REMOVE)) || [[ -f "$XPI" ]] || { log "usage: $(basename "$0") <xpi> [--profile DIR]"; exit 1; }
     if [[ -z "$PROFILE" ]]; then
         PROFILE="$(default_profile)" || { log "no LibreWolf profile; skipping"; return 0; }
     fi
     [[ -d "$PROFILE" ]] || { log "profile $PROFILE missing; skipping"; return 0; }
+    if ((REMOVE)); then
+        rm -f "$PROFILE/extensions/$GECKO_ID.xpi"
+        log "removed from $PROFILE (prefs kept; takes effect on next start)"
+        return 0
+    fi
     install_xpi
     ensure_prefs
     log "takes effect the next time LibreWolf starts"

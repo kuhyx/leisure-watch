@@ -17,8 +17,12 @@
 #      The wrapper is root-owned, so step 2 runs sudo.
 # Takes effect the next time Helium starts -- it never restarts a browser.
 #
+# --remove undoes both steps (stand-down): the extension path leaves the conf
+# entry and the wrapper's flag; the other extensions in them stay. The
+# wrapper defaults to $LEISURE_WATCH_WRAPPER (tests) or helium-browser's.
+#
 # Usage: install_helium_extension.sh <unpacked-extension-dir> [--no-wrapper]
-#        [--wrapper-only] [--wrapper PATH]   (PATH: for testing)
+#        [--wrapper-only] [--wrapper PATH] [--remove]   (PATH: for testing)
 #
 # Adapted from leetcode-guard/scripts/install_nudge_extension.sh: the same
 # merge, keeping LeechBlock, uBlock and the leetcode nudge in the one flag.
@@ -31,7 +35,8 @@ DO_CONF=1
 DO_WRAPPER=1
 readonly FLAGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/helium-browser-flags.conf"
 readonly FLAG_RE='--load-extension="([^"]*)"'
-WRAPPER="$(readlink -f /usr/local/bin/helium-browser 2>/dev/null || true)"
+DO_REMOVE=0
+WRAPPER="${LEISURE_WATCH_WRAPPER:-$(readlink -f /usr/local/bin/helium-browser 2>/dev/null || true)}"
 TEMP_FILE=""
 
 cleanup() {
@@ -115,22 +120,76 @@ merge_into_wrapper() {
         return 1
     }
     new_line="$(rewrite_exec_line "$line")"
+    swap_wrapper_line "$line" "$new_line"
+    log "merged $count --load-extension flag(s) in $WRAPPER into one"
+}
+
+# Replace one exact line of the wrapper. cp onto the existing file keeps its
+# owner and mode; the wrapper is root-owned, so that cp may need sudo.
+swap_wrapper_line() {
+    local old="$1" new="$2" current
     TEMP_FILE="$(mktemp)"
-    local current
     while IFS= read -r current || [[ -n $current ]]; do
-        if [[ $current == "$line" ]]; then
-            printf '%s\n' "$new_line"
+        if [[ $current == "$old" ]]; then
+            printf '%s\n' "$new"
         else
             printf '%s\n' "$current"
         fi
     done < "$WRAPPER" > "$TEMP_FILE"
-    # cp onto the existing file keeps its owner and mode.
     if [[ -w "$WRAPPER" ]]; then
         cp "$TEMP_FILE" "$WRAPPER"
     else
         sudo cp "$TEMP_FILE" "$WRAPPER"
     fi
-    log "merged $count --load-extension flag(s) in $WRAPPER into one"
+}
+
+# Drop $EXTENSION from the comma-joined path list $1.
+without_extension() {
+    local joined="" path
+    local -a parts
+    IFS=',' read -r -a parts <<< "$1"
+    for path in "${parts[@]}"; do
+        [[ -z $path || $path == "$EXTENSION" ]] && continue
+        joined+="${joined:+,}$path"
+    done
+    printf '%s' "$joined"
+}
+
+remove_from_conf() {
+    [[ -f $FLAGS_FILE ]] || return 0
+    local line kept out=""
+    while IFS= read -r line || [[ -n $line ]]; do
+        if [[ $line == --load-extension=* ]]; then
+            kept="$(without_extension "${line#--load-extension=}")"
+            [[ -z $kept ]] || out+="--load-extension=$kept"$'\n'
+        else
+            out+="$line"$'\n'
+        fi
+    done < "$FLAGS_FILE"
+    # In place, so a symlinked config stays linked.
+    printf '%s' "$out" > "$FLAGS_FILE"
+    log "removed from $FLAGS_FILE"
+}
+
+remove_from_wrapper() {
+    if [[ -z "$WRAPPER" || ! -f "$WRAPPER" ]] || ! file "$WRAPPER" | grep -q text; then
+        log "no script wrapper in front of Helium; nothing to remove"
+        return 0
+    fi
+    local line kept flag
+    line="$(grep -m1 -E '^exec .*--load-extension=' "$WRAPPER" || true)"
+    if [[ $line != *"$EXTENSION"* || ! $line =~ $FLAG_RE ]]; then
+        log "not in $WRAPPER"
+        return 0
+    fi
+    flag="${BASH_REMATCH[0]}"
+    kept="$(without_extension "${BASH_REMATCH[1]}")"
+    if [[ -n $kept ]]; then
+        swap_wrapper_line "$line" "${line/"$flag"/--load-extension=\"$kept\"}"
+    else
+        swap_wrapper_line "$line" "${line/ "$flag"/}"
+    fi
+    log "removed from $WRAPPER"
 }
 
 main() {
@@ -139,15 +198,22 @@ main() {
             --wrapper) WRAPPER="$2"; shift 2 ;;
             --no-wrapper) DO_WRAPPER=0; shift ;;
             --wrapper-only) DO_CONF=0; shift ;;
+            --remove) DO_REMOVE=1; shift ;;
             -*) log "unknown option: $1"; exit 1 ;;
-            *) EXTENSION="$(realpath "$1")"; shift ;;
+            *) EXTENSION="$(realpath -m "$1")"; shift ;;
         esac
     done
-    [[ -n "$EXTENSION" && -f "$EXTENSION/manifest.json" ]] || {
-        log "usage: $(basename "$0") <unpacked-extension-dir> [--no-wrapper|--wrapper-only]"
+    # The removal names the path only; the directory may already be gone.
+    if [[ -z "$EXTENSION" ]] || { ((! DO_REMOVE)) && [[ ! -f "$EXTENSION/manifest.json" ]]; }; then
+        log "usage: $(basename "$0") <unpacked-extension-dir> [--no-wrapper|--wrapper-only|--remove]"
         exit 1
-    }
+    fi
     readonly EXTENSION
+    if ((DO_REMOVE)); then
+        if ((DO_CONF)); then remove_from_conf; fi
+        if ((DO_WRAPPER)); then remove_from_wrapper; fi
+        return 0
+    fi
     if ((DO_CONF)); then ensure_conf_entry; fi
     if ((DO_WRAPPER)); then merge_into_wrapper; fi
     log "takes effect the next time Helium starts (never restarted from here)"
