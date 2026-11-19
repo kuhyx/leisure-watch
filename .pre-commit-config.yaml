@@ -139,8 +139,8 @@ repos:
         pass_filenames: false
 
       # Every dependency on its ecosystem's newest STABLE release. Runs
-      # without --strict: offline it degrades to the cached answer; CI is
-      # the strict authority.
+      # without --strict: offline it degrades to the cached answer. CI skips
+      # this check (runs locally only).
       - id: dependency-freshness
         name: dependencies on newest stable
         entry: scripts/check_dependency_freshness.sh
