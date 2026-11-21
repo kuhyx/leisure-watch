@@ -44,7 +44,7 @@ ensure_tools() {
     exit 1
 }
 
-readonly EARNED_TIME="earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.22.0#subdirectory=earned_time"
+readonly EARNED_TIME="earned-time @ git+https://github.com/kuhyx/utils@earned-time-v0.23.0#subdirectory=earned_time"
 
 ensure_earned_time() {
     # --no-deps below never pulls earned-time; install the pin only when the
