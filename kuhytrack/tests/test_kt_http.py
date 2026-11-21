@@ -155,6 +155,25 @@ class HttpApi(unittest.TestCase):
             )
         self.assertEqual(cm.exception.code, 404)
 
+    def test_kuhy_credit_served_unauthenticated(self):
+        """The two kuhy-credit vendor files should serve without auth, so the dashboard's
+        script tag works from a browser that hasn't set KT_TOKEN yet."""
+        for name in ("kuhy-credit.js", "credit-data.js"):
+            status, ctype, body = self.raw(f"/vendor/kuhy-credit/{name}", token=None)
+            self.assertEqual(status, 200, f"{name} should be served unauthenticated")
+            self.assertIn("text/javascript", ctype)
+            self.assertGreater(len(body), 0)
+
+    def test_kuhy_credit_paths_not_joined(self):
+        """Path traversal or non-whitelisted names must not return 200; user input is
+        split by prefix only and then checked against _KUHY_CREDIT_FILES."""
+        for bad in ("/vendor/kuhy-credit/../ktstore.py", "/vendor/kuhy-credit/shady.js"):
+            try:
+                status, ctype, body = self.raw(bad, token=None)
+            except urllib.error.HTTPError as e:
+                status = e.code
+            self.assertNotEqual(status, 200, f"{bad} should not be served")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

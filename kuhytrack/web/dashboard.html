@@ -11,7 +11,8 @@
   point of the product, so they are the only saturated things on the page.
   No webfonts on purpose: the server is meant to run tailnet-only and offline.
 -->
-<style>
+  <script type="module" src="/vendor/kuhy-credit/kuhy-credit.js"></script>
+  <style>
   :root{
     --paper:#E7EBEA; --paper-2:#F2F5F4; --grid:#CBD5D3; --ink:#12252B;
     --ink-2:#4A6068; --rule:#A9BAB7;
@@ -112,6 +113,7 @@
   <footer>
     <span id="devs"></span>
     <span aria-label="refreshes every 60s"><svg class="glyph" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/></svg> <span id="clock"></span></span>
+    <kuhy-credit placement="above" align="end" style="--kuhy-credit-size:32px"></kuhy-credit>
   </footer>
 </div>
 <script>

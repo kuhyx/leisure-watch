@@ -17,6 +17,8 @@ from ktstore import (
     get_events,
 )
 
+_KUHY_CREDIT_FILES = {"kuhy-credit.js", "credit-data.js"}
+
 
 class GetRoutes:
     """GET handler; relies on Handler's _send/_authed."""
@@ -38,6 +40,17 @@ class GetRoutes:
                     200, raw=f.read_bytes(), ctype="text/html; charset=utf-8"
                 )
             return self._send(404, {"error": "no dashboard"})
+        # Unauthenticated static vendor files for kuhy-credit web component.
+        if p.startswith("/vendor/kuhy-credit/"):
+            name = p.split("/vendor/kuhy-credit/", 1)[1]
+            if name in _KUHY_CREDIT_FILES:
+                f = WEB_DIR / "vendor" / "kuhy-credit" / name
+                if f.exists():
+                    return self._send(
+                        200, raw=f.read_bytes(), ctype="text/javascript; charset=utf-8"
+                    )
+                return self._send(404, {"error": "not found"})
+            return self._send(404, {"error": "not found"})
         if not self._authed():
             return self._send(401, {"error": "unauthorized"})
         try:
