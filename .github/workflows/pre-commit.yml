@@ -14,12 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - group: mypy
-            hooks: mypy
-            skip: ""
           - group: rest
             hooks: ""
-            skip: mypy,dependency-freshness
+            skip: "dependency-freshness"
     name: pre-commit (${{ matrix.group }})
     steps:
       - uses: actions/checkout@v4

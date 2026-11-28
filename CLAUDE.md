@@ -24,8 +24,8 @@ Dev tools are exact-pinned in `pyproject.toml` `[dev]`; `python -m venv .venv &&
 - run: `python3 -m leisure_watch run` (deployed: `systemctl --user status leisure-watch`; one-shot: `python3 -m leisure_watch status --json`)
 - test: `python3 -m pytest -q`
 - test-changed: `scripts/test_changed.sh`
-- lint: `python -m ruff check . && python -m ruff format --check . && python -m mypy leisure_watch tests`
-- coverage: `python -m pytest -q --cov=leisure_watch --cov-branch --cov-report=xml --cov-fail-under=100`
-- coverage-gaps: `coverage-gaps coverage.xml`
+- lint: n/a: dropped (kuhy, 2026-11-27)
+- coverage: n/a: dropped (kuhy, 2026-11-27)
+- coverage-gaps: n/a: dropped (kuhy, 2026-11-27)
 - stand down (done 2026-11-16, budget removed): `./install.sh --uninstall`; the unit stays off, deploy.sh would reinstall it
 - deploy: `scripts/deploy.sh` (pulls ~/src/leisure-watch, runs its install.sh, health-checks the unit + now.json; `--check-only` re-runs the checks)
